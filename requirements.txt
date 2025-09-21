@@ -1,0 +1,11 @@
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-dotenv==1.0.0
+slowapi==0.1.9  # For rate limiting
+
+# Bloomberg API (blpapi) Installation Instructions:
+# blpapi is not available on PyPI and must be installed separately from Bloomberg.
+# 1. Download the blpapi wheel from Bloomberg's official API portal or OpenFIGI
+# 2. Install using: pip install path/to/blpapi-3.24.2-py3-none-any.whl
+# 3. Alternatively, use conda: conda install -c bloomberg blpapi
+# For development/testing without Bloomberg, the app will use mock data
