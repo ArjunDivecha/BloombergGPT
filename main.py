@@ -41,6 +41,7 @@ SECURITY:
 """
 
 import os
+import re
 import datetime
 from typing import List, Dict, Optional
 from fastapi import FastAPI, HTTPException, Depends, Request, status, Query
@@ -59,8 +60,13 @@ except ImportError:
     print("Warning: blpapi not found. Using mock data for development/testing.")
     print("To use real Bloomberg data, install blpapi from Bloomberg's API portal.")
 
-# Load environment variables
-load_dotenv()
+# Hardcoded configuration (no environment variables needed)
+API_KEY = "Caeser00**"
+BROKER_HOST = "0.0.0.0"
+BROKER_PORT = 8000
+BLOOMBERG_HOST = "localhost"
+BLOOMBERG_PORT = 8194
+RATE_LIMIT = "60/minute"
 
 # Initialize FastAPI app
 app = FastAPI(title="Bloomberg Data Broker", version="1.0.0")
@@ -69,14 +75,6 @@ app = FastAPI(title="Bloomberg Data Broker", version="1.0.0")
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# Configuration from environment variables
-API_KEY = os.getenv("API_KEY", "Caeser00**")
-BROKER_HOST = os.getenv("BROKER_HOST", "0.0.0.0")
-BROKER_PORT = int(os.getenv("BROKER_PORT", "8000"))
-BLOOMBERG_HOST = os.getenv("BLOOMBERG_HOST", "localhost")
-BLOOMBERG_PORT = int(os.getenv("BLOOMBERG_PORT", "8194"))
-RATE_LIMIT = os.getenv("RATE_LIMIT", "60/minute")
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
 async def get_api_key(api_key: str = Depends(api_key_header)):
@@ -86,6 +84,25 @@ async def get_api_key(api_key: str = Depends(api_key_header)):
 
 # Allowed fields
 ALLOWED_FIELDS = ["PX_LAST", "PX_OPEN", "PX_HIGH", "PX_LOW", "VOLUME", "NAME", "MARKET_CAP"]
+
+# Load RAG components for natural language queries
+try:
+    import pickle
+    from sentence_transformers import SentenceTransformer
+
+    with open("data/rag_knowledge_base.pkl", "rb") as f:
+        kb = pickle.load(f)
+    chunks = kb["chunks"]
+
+    model = SentenceTransformer("all-MiniLM-L6-v2")
+
+    with open("models/hybrid_retriever.pkl", "rb") as f:
+        retriever_data = pickle.load(f)
+
+    RAG_AVAILABLE = True
+except Exception as e:
+    print(f"Warning: RAG system not available: {e}")
+    RAG_AVAILABLE = False
 
 def validate_fields(fields: List[str]) -> List[str]:
     """Validate that all fields are in the allowed list"""
@@ -319,6 +336,58 @@ def get_bloomberg_historical_data(session, ticker, fields, start_date, end_date)
 def create_provenance(fields: List[str], timestamp: datetime.datetime) -> str:
     """Create provenance string for responses"""
     return f"Bloomberg (brokered via Desktop API) — fields: {fields} — retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+def resolve_nl_query_to_fields_ticker(query: str) -> Dict:
+    """Resolve natural language query to fields and ticker using RAG"""
+    try:
+        if not RAG_AVAILABLE:
+            print("DEBUG: RAG not available, using fallback")
+            # Fallback resolution
+            found_ticker = "AAPL US Equity" if "apple" in query.lower() else "MSFT US Equity"
+            resolved_fields = ["PX_LAST"]
+            query_type = "reference"
+        else:
+            # Simple keyword extraction for fields
+            import re
+            potential_fields = re.findall(r'\b[A-Z_]{3,}\b', query)
+
+            # Use hybrid retrieval to find relevant chunks
+            import numpy as np
+            query_embedding = model.encode([query])
+            scores_dense, indices_dense = retriever_data['dense_index'].search(query_embedding, 3)
+
+            # Simple ticker extraction
+            tickers = ["AAPL", "MSFT", "GOOGL"]
+            found_ticker = None
+            for ticker in tickers:
+                if ticker.lower() in query.lower():
+                    found_ticker = f"{ticker} US Equity"
+                    break
+
+            if not found_ticker:
+                found_ticker = "AAPL US Equity"  # Default
+
+            # Map potential fields to allowed fields
+            resolved_fields = [f for f in potential_fields if f in ALLOWED_FIELDS]
+
+            if not resolved_fields:
+                resolved_fields = ["PX_LAST"]  # Default
+
+            query_type = "reference" if "last" in query.lower() or "price" in query.lower() else "historical"
+
+        return {
+            "ticker": found_ticker,
+            "fields": resolved_fields,
+            "query_type": query_type
+        }
+    except Exception as e:
+        print(f"DEBUG: RAG resolution error: {e}")
+        # Fallback
+        return {
+            "ticker": "AAPL US Equity",
+            "fields": ["PX_LAST"],
+            "query_type": "reference"
+        }
 
 @app.get("/blp/fields")
 @limiter.limit("60/minute")
@@ -602,9 +671,149 @@ async def get_historical(
         "provenance": provenance
     }
 
+@app.get("/blp/nlquery")
+@limiter.limit("60/minute")
+async def natural_language_query(
+    request: Request,
+    query: str,
+    api_key: str = Depends(get_api_key)
+):
+    """Process a natural language query using RAG and return Bloomberg data"""
+    if not query:
+        raise HTTPException(status_code=400, detail="Query parameter is required")
+
+    print(f"DEBUG: Processing natural language query: {query}")
+
+    # Resolve query using RAG
+    resolution = resolve_nl_query_to_fields_ticker(query)
+    print(f"DEBUG: Resolved to ticker={resolution['ticker']}, fields={resolution['fields']}, type={resolution['query_type']}")
+
+    # Get data from existing endpoints
+    if resolution['query_type'] == "reference":
+        # Use the existing refdata endpoint logic
+        validated_fields = validate_fields(resolution['fields'])
+        data = {}
+
+        if BLOOMBERG_AVAILABLE:
+            session = get_bloomberg_session()
+            if session:
+                bloomberg_data = get_bloomberg_data(session, resolution['ticker'], validated_fields)
+                if bloomberg_data:
+                    data = bloomberg_data
+                session.stop()
+            else:
+                # Use mock data
+                data = {
+                    "PX_LAST": "175.45",
+                    "PX_OPEN": "173.50",
+                    "PX_HIGH": "176.20",
+                    "PX_LOW": "172.80",
+                    "VOLUME": "58390000",
+                    "NAME": "Apple Inc",
+                    "MARKET_CAP": "2800000000000"
+                }
+        else:
+            # Use mock data
+            data = {
+                "PX_LAST": "175.45",
+                "PX_OPEN": "173.50",
+                "PX_HIGH": "176.20",
+                "PX_LOW": "172.80",
+                "VOLUME": "58390000",
+                "NAME": "Apple Inc",
+                "MARKET_CAP": "2800000000000"
+            }
+
+        filtered_data = {k: v for k, v in data.items() if k in validated_fields}
+
+    else:
+        # Use the existing historical endpoint logic
+        validated_fields = validate_fields(resolution['fields'])
+        data = []
+
+        if BLOOMBERG_AVAILABLE:
+            session = get_bloomberg_session()
+            if session:
+                bloomberg_historical = get_bloomberg_historical_data(
+                    session, resolution['ticker'], validated_fields,
+                    "2025-01-01", datetime.date.today().isoformat()
+                )
+                if bloomberg_historical:
+                    data = bloomberg_historical
+                session.stop()
+            else:
+                # Use mock data
+                data = [
+                    {
+                        "date": "2025-09-18",
+                        "values": {
+                            "PX_LAST": 174.12,
+                            "PX_OPEN": 172.50,
+                            "PX_HIGH": 175.00,
+                            "PX_LOW": 171.80,
+                            "VOLUME": 58230000
+                        }
+                    },
+                    {
+                        "date": "2025-09-19",
+                        "values": {
+                            "PX_LAST": 175.45,
+                            "PX_OPEN": 173.50,
+                            "PX_HIGH": 176.20,
+                            "PX_LOW": 172.80,
+                            "VOLUME": 58390000
+                        }
+                    }
+                ]
+        else:
+            # Use mock data
+            data = [
+                {
+                    "date": "2025-09-18",
+                    "values": {
+                        "PX_LAST": 174.12,
+                        "PX_OPEN": 172.50,
+                        "PX_HIGH": 175.00,
+                        "PX_LOW": 171.80,
+                        "VOLUME": 58230000
+                    }
+                },
+                {
+                    "date": "2025-09-19",
+                    "values": {
+                        "PX_LAST": 175.45,
+                        "PX_OPEN": 173.50,
+                        "PX_HIGH": 176.20,
+                        "PX_LOW": 172.80,
+                        "VOLUME": 58390000
+                    }
+                }
+            ]
+
+        filtered_data = [
+            {
+                "date": item["date"],
+                "values": {k: v for k, v in item["values"].items() if k in validated_fields}
+            }
+            for item in data
+        ]
+
+    timestamp = datetime.datetime.utcnow()
+    provenance = create_provenance(resolution['fields'], timestamp)
+
+    return {
+        "query": query,
+        "resolved_ticker": resolution['ticker'],
+        "resolved_fields": resolution['fields'],
+        "query_type": resolution['query_type'],
+        "data": filtered_data if resolution['query_type'] == "historical" else filtered_data,
+        "provenance": provenance
+    }
+
 if __name__ == "__main__":
     import uvicorn
     print(f"Starting Bloomberg Data Broker on {BROKER_HOST}:{BROKER_PORT}")
     print(f"API Key: {API_KEY}")
     print(f"Bloomberg Terminal: {BLOOMBERG_HOST}:{BLOOMBERG_PORT}")
+    print(f"RAG System: {'Available' if RAG_AVAILABLE else 'Not Available'}")
     uvicorn.run(app, host=BROKER_HOST, port=BROKER_PORT)

@@ -58,3 +58,4 @@ echo If all items show ✓, your Bloomberg ChatGPT is ready!
 echo If any show ✗, run start_bloomberg_broker.bat
 echo.
 pause
+

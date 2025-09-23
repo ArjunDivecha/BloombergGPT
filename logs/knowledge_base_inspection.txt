@@ -1,0 +1,76 @@
+=== Knowledge Base Inspection Report ===
+
+=== Chunks Summary ===
+Total Chunks: 141
+Sample Chunk IDs: 0, 1, 2, 3, 4
+Sample Chunk Sources: BLPAPI Full Documentation
+
+=== Sample Chunks ===
+
+Chunk 0:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars):  # BLPAPI Python Examples ## Reference Data Request Example ```python import blpapi session = blpapi.Session() session.start() service = session.getService("//blp/refdata") request = service.createReq...
+
+Chunk 1:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars): Equity") request.getElement("securities").appendValue("MSFT US Equity") # Add fields fields = request.getElement("fields") fields.appendValue("PX_LAST") fields.appendValue("MARKET_CAP") fields.appendV...
+
+Chunk 2:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars): equest Example ```python request = service.createRequest("HistoricalDataRequest") request.getElement("securities").appendValue("SPX Index") fields = request.getElement("fields") fields.appendValue("PX...
+
+Chunk 3:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars): dicity.setChoice("DAILY") start_date = request.getElement("startDate") start_date.setValue("20230101") end_date = request.getElement("endDate") end_date.setValue("20231231") session.sendRequest(reques...
+
+Chunk 4:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars): papi.Event.RESPONSE: # Process response pass except Exception as e: print(f"Error: {e}") ``` ## Best Practices 1. Always check for response errors 2. Use appropriate overrides 3. Batch requests for ef...
+
+Chunk 5:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars): tion 2 # BLPAPI Python Examples ## Reference Data Request Example ```python import blpapi session = blpapi.Session() session.start() service = session.getService("//blp/refdata") request = service.cre...
+
+Chunk 6:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars): PL US Equity") request.getElement("securities").appendValue("MSFT US Equity") # Add fields fields = request.getElement("fields") fields.appendValue("PX_LAST") fields.appendValue("MARKET_CAP") fields.a...
+
+Chunk 7:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars): Data Request Example ```python request = service.createRequest("HistoricalDataRequest") request.getElement("securities").appendValue("SPX Index") fields = request.getElement("fields") fields.appendVal...
+
+Chunk 8:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars):  periodicity.setChoice("DAILY") start_date = request.getElement("startDate") start_date.setValue("20230101") end_date = request.getElement("endDate") end_date.setValue("20231231") session.sendRequest(...
+
+Chunk 9:
+Source: BLPAPI Full Documentation
+Version: Latest
+Text (first 200 chars):  == blpapi.Event.RESPONSE: # Process response pass except Exception as e: print(f"Error: {e}") ``` ## Best Practices 1. Always check for response errors 2. Use appropriate overrides 3. Batch requests ...
+
+=== Allowed Fields ===
+Fields Count: 2
+Sample Fields:
+  field_code       human_label                     description     units asset_classes        aliases
+0    PX_LAST        Last Price           The last traded price  Currency        Equity     last price
+1  DVD_EX_DT  Dividend Ex-Date  Date when dividend is excluded      Date        Equity  dividend date
+
+=== Ticker Aliases ===
+Aliases Count: 2
+Sample Aliases:
+       alias canonical_ticker asset_class  confidence
+0      Apple   AAPL US Equity      Equity        0.95
+1  Microsoft   MSFT US Equity      Equity        0.98
+
+=== Unique Data Items Identified ===
+Potential Field Codes Found: 178
+Sample Field Codes: GBPCHF, INDX_, INDX_SORTINO_RATIO, RUT, MACD, BOOK_VAL, NET_MARGIN, GBPZAR, PAYOUT_RATIO, PRICE_ADJ, CHFJPY, MARKET_CAP, DVD_RATE, GBP, INSTITUTIONAL_HOLDINGS_PCT, INTEREST_COVER, BOOK_VALUE_PER_SHARE, API, UNH, FLOAT_SHARES

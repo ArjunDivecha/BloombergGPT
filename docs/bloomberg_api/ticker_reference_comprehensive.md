@@ -1,0 +1,132 @@
+
+# Comprehensive Ticker Reference
+
+## US Equity Tickers
+- AAPL US Equity: Company 1 - AAPL US Equity
+- MSFT US Equity: Company 2 - MSFT US Equity
+- GOOGL US Equity: Company 3 - GOOGL US Equity
+- AMZN US Equity: Company 4 - AMZN US Equity
+- TSLA US Equity: Company 5 - TSLA US Equity
+- META US Equity: Company 6 - META US Equity
+- NVDA US Equity: Company 7 - NVDA US Equity
+- JPM US Equity: Company 8 - JPM US Equity
+- JNJ US Equity: Company 9 - JNJ US Equity
+- V US Equity: Company 10 - V US Equity
+- PG US Equity: Company 11 - PG US Equity
+- UNH US Equity: Company 12 - UNH US Equity
+- HD US Equity: Company 13 - HD US Equity
+- MA US Equity: Company 14 - MA US Equity
+- DIS US Equity: Company 15 - DIS US Equity
+- PYPL US Equity: Company 16 - PYPL US Equity
+- BAC US Equity: Company 17 - BAC US Equity
+- ADBE US Equity: Company 18 - ADBE US Equity
+- CMCSA US Equity: Company 19 - CMCSA US Equity
+- XOM US Equity: Company 20 - XOM US Equity
+- TICKER000 US Equity: Example ticker 21
+- TICKER001 US Equity: Example ticker 22
+- TICKER002 US Equity: Example ticker 23
+- TICKER003 US Equity: Example ticker 24
+- TICKER004 US Equity: Example ticker 25
+- TICKER005 US Equity: Example ticker 26
+- TICKER006 US Equity: Example ticker 27
+- TICKER007 US Equity: Example ticker 28
+- TICKER008 US Equity: Example ticker 29
+- TICKER009 US Equity: Example ticker 30
+- TICKER010 US Equity: Example ticker 31
+- TICKER011 US Equity: Example ticker 32
+- TICKER012 US Equity: Example ticker 33
+- TICKER013 US Equity: Example ticker 34
+- TICKER014 US Equity: Example ticker 35
+- TICKER015 US Equity: Example ticker 36
+- TICKER016 US Equity: Example ticker 37
+- TICKER017 US Equity: Example ticker 38
+- TICKER018 US Equity: Example ticker 39
+- TICKER019 US Equity: Example ticker 40
+- TICKER020 US Equity: Example ticker 41
+- TICKER021 US Equity: Example ticker 42
+- TICKER022 US Equity: Example ticker 43
+- TICKER023 US Equity: Example ticker 44
+- TICKER024 US Equity: Example ticker 45
+- TICKER025 US Equity: Example ticker 46
+- TICKER026 US Equity: Example ticker 47
+- TICKER027 US Equity: Example ticker 48
+- TICKER028 US Equity: Example ticker 49
+- TICKER029 US Equity: Example ticker 50
+- TICKER030 US Equity: Example ticker 51
+- TICKER031 US Equity: Example ticker 52
+- TICKER032 US Equity: Example ticker 53
+- TICKER033 US Equity: Example ticker 54
+- TICKER034 US Equity: Example ticker 55
+- TICKER035 US Equity: Example ticker 56
+- TICKER036 US Equity: Example ticker 57
+- TICKER037 US Equity: Example ticker 58
+- TICKER038 US Equity: Example ticker 59
+- TICKER039 US Equity: Example ticker 60
+- TICKER040 US Equity: Example ticker 61
+- TICKER041 US Equity: Example ticker 62
+- TICKER042 US Equity: Example ticker 63
+- TICKER043 US Equity: Example ticker 64
+- TICKER044 US Equity: Example ticker 65
+- TICKER045 US Equity: Example ticker 66
+- TICKER046 US Equity: Example ticker 67
+- TICKER047 US Equity: Example ticker 68
+- TICKER048 US Equity: Example ticker 69
+- TICKER049 US Equity: Example ticker 70
+- TICKER050 US Equity: Example ticker 71
+- TICKER051 US Equity: Example ticker 72
+- TICKER052 US Equity: Example ticker 73
+- TICKER053 US Equity: Example ticker 74
+- TICKER054 US Equity: Example ticker 75
+- TICKER055 US Equity: Example ticker 76
+- TICKER056 US Equity: Example ticker 77
+- TICKER057 US Equity: Example ticker 78
+- TICKER058 US Equity: Example ticker 79
+- TICKER059 US Equity: Example ticker 80
+- TICKER060 US Equity: Example ticker 81
+- TICKER061 US Equity: Example ticker 82
+- TICKER062 US Equity: Example ticker 83
+- TICKER063 US Equity: Example ticker 84
+- TICKER064 US Equity: Example ticker 85
+- TICKER065 US Equity: Example ticker 86
+- TICKER066 US Equity: Example ticker 87
+- TICKER067 US Equity: Example ticker 88
+- TICKER068 US Equity: Example ticker 89
+- TICKER069 US Equity: Example ticker 90
+- TICKER070 US Equity: Example ticker 91
+- TICKER071 US Equity: Example ticker 92
+- TICKER072 US Equity: Example ticker 93
+- TICKER073 US Equity: Example ticker 94
+- TICKER074 US Equity: Example ticker 95
+- TICKER075 US Equity: Example ticker 96
+- TICKER076 US Equity: Example ticker 97
+- TICKER077 US Equity: Example ticker 98
+- TICKER078 US Equity: Example ticker 99
+- TICKER079 US Equity: Example ticker 100
+- TICKER080 US Equity: Example ticker 101
+- TICKER081 US Equity: Example ticker 102
+- TICKER082 US Equity: Example ticker 103
+- TICKER083 US Equity: Example ticker 104
+- TICKER084 US Equity: Example ticker 105
+- TICKER085 US Equity: Example ticker 106
+- TICKER086 US Equity: Example ticker 107
+- TICKER087 US Equity: Example ticker 108
+- TICKER088 US Equity: Example ticker 109
+- TICKER089 US Equity: Example ticker 110
+- TICKER090 US Equity: Example ticker 111
+- TICKER091 US Equity: Example ticker 112
+- TICKER092 US Equity: Example ticker 113
+- TICKER093 US Equity: Example ticker 114
+- TICKER094 US Equity: Example ticker 115
+- TICKER095 US Equity: Example ticker 116
+- TICKER096 US Equity: Example ticker 117
+- TICKER097 US Equity: Example ticker 118
+- TICKER098 US Equity: Example ticker 119
+- TICKER099 US Equity: Example ticker 120
+
+
+## Index Tickers
+- SPX Index: Index ticker
+- INDU Index: Index ticker
+- VIX Index: Index ticker
+- NDX Index: Index ticker
+- RUT Index: Index ticker

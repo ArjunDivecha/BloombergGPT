@@ -43,6 +43,36 @@ This checklist provides step-by-step instructions to set up a secure tunnel to e
 2. Ensure the API key is configured correctly
 3. Test the integration
 
+## Static URL Alternatives to ngrok Dynamic URLs
+
+### Problem with ngrok Free
+- ngrok generates random URLs (e.g., `abc123.ngrok.io`) that change on restart
+- Custom GPT must be updated with new URL each time ngrok restarts
+- URLs expire after inactivity
+
+### Alternative Solutions
+
+#### 1. ngrok Custom Domain (Paid - $8.33/month)
+- **Pros:** Fixed custom domain (e.g., `api.yourdomain.com`)
+- **Setup:** Buy domain + ngrok custom domain feature
+- **Best for:** Production use, professional appearance
+
+#### 2. Cloudflare Tunnel (Free tier)
+- **Pros:** Free, includes CDN, reliable
+- **Setup:** Domain + Cloudflare account
+- **Best for:** Free alternative with domain control
+
+#### 3. Cloud Deployment ($5-20/month)
+- **Pros:** Most reliable, scalable, fixed IP/domain
+- **Setup:** Deploy to AWS/GCP/Azure/DigitalOcean
+- **Best for:** Production, high availability
+
+#### 4. Static IP + Port Forwarding
+- **Pros:** No external service needed
+- **Setup:** Configure router port forwarding
+- **Best for:** Simple home setup
+- **Cons:** IP may change, security concerns
+
 ## Security Notes
 - Use HTTPS URLs only
 - Monitor ngrok usage for rate limits

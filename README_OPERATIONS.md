@@ -139,3 +139,8 @@ When everything is working:
 - ✅ ChatGPT: Returns real Bloomberg data with charts
 
 **Your Bloomberg AI Assistant is ready!** 🚀
+
+
+
+
+

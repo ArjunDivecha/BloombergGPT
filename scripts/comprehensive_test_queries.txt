@@ -1,0 +1,20 @@
+What is PX_LAST?
+How to get last price?
+Dividend ex-date field?
+What is the field for market capitalization?
+How to retrieve historical data?
+Explain the difference between reference data and historical data.
+What is the canonical ticker for Apple?
+How to handle multiple tickers in one query?
+What is the field for volume?
+How to specify date ranges for historical queries?
+What is the asset class for EURUSD Curncy?
+How to get real-time data?
+What is the field for dividend yield?
+How to use BLPAPI for indices?
+What is the field for price change?
+How to get data for multiple fields at once?
+What is the field for last update time?
+How to handle errors in BLPAPI?
+What is the field for currency?
+How to get data for commodities?

@@ -6,18 +6,7 @@ echo ==========================================
 echo.
 
 echo [1/4] Checking configuration...
-if not exist ".env" (
-    echo ❌ ERROR: .env file not found!
-    echo.
-    echo Please create .env file from env.template:
-    echo 1. Copy env.template to .env
-    echo 2. Add your NGROK_AUTHTOKEN from https://dashboard.ngrok.com/get-started/your-authtoken
-    echo 3. Update API_KEY if needed
-    echo.
-    pause
-    exit /b 1
-)
-echo ✅ Configuration file found
+echo ✅ Configuration hardcoded in source code - no .env file needed
 
 echo.
 echo [2/4] Starting Bloomberg Data Broker...

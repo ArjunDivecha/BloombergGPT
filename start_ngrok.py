@@ -10,22 +10,22 @@ import subprocess
 import time
 from dotenv import load_dotenv
 
+# Load environment variables
+load_dotenv()
+
 def find_ngrok_executable():
     """Find ngrok executable in common locations"""
     possible_paths = [
         "./ngrok.exe",
-        "./ngrok",
         "ngrok.exe",
         "ngrok",
-        "\\\\Mac\\Home\\Downloads\\ngrok-v3-stable-windows-arm64\\ngrok.exe",
-        os.path.expanduser("~/Downloads/ngrok.exe"),
-        os.path.expanduser("~/Downloads/ngrok"),
+        os.path.join(os.path.dirname(__file__), "ngrok.exe"),
     ]
-    
+
     for path in possible_paths:
         if os.path.isfile(path):
             return path
-    
+
     return None
 
 def setup_ngrok_auth(authtoken):
@@ -90,21 +90,17 @@ def main():
     print("=" * 50)
     print("🚇 ngrok Tunnel Starter")
     print("=" * 50)
-    
-    # Load environment variables
-    load_dotenv()
-    
-    # Get configuration
+
+    # Get configuration from environment variables
     authtoken = os.getenv("NGROK_AUTHTOKEN")
     subdomain = os.getenv("NGROK_SUBDOMAIN")
     region = os.getenv("NGROK_REGION", "us")
     port = int(os.getenv("BROKER_PORT", "8000"))
     
-    if not authtoken or authtoken == "your_ngrok_authtoken_here":
-        print("❌ ERROR: NGROK_AUTHTOKEN not configured!")
-        print("Please:")
-        print("1. Get your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken")
-        print("2. Add it to your .env file: NGROK_AUTHTOKEN=your_token_here")
+    if not authtoken:
+        print("❌ ERROR: ngrok authtoken not configured!")
+        print("Please set NGROK_AUTHTOKEN in your .env file.")
+        print("Get your token from: https://dashboard.ngrok.com/get-started/your-authtoken")
         input("Press Enter to exit...")
         return False
     
@@ -144,3 +140,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

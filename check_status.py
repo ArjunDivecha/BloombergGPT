@@ -9,7 +9,7 @@ import sys
 import time
 import requests
 import subprocess
-from dotenv import load_dotenv
+# Configuration hardcoded (no environment variables needed)
 
 def clear_screen():
     """Clear the terminal screen"""
@@ -28,8 +28,8 @@ def check_bloomberg_connection():
     try:
         import blpapi
         sessionOptions = blpapi.SessionOptions()
-        sessionOptions.setServerHost(os.getenv("BLOOMBERG_HOST", "localhost"))
-        sessionOptions.setServerPort(int(os.getenv("BLOOMBERG_PORT", "8194")))
+        sessionOptions.setServerHost("localhost")
+        sessionOptions.setServerPort(8194)
         session = blpapi.Session(sessionOptions)
         
         if session.start():
@@ -42,7 +42,7 @@ def check_bloomberg_connection():
 
 def check_broker_running():
     """Check if Bloomberg Broker is running"""
-    port = int(os.getenv("BROKER_PORT", "8000"))
+    port = 8000
     try:
         result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, timeout=5)
         if f":{port}" in result.stdout:
@@ -55,8 +55,8 @@ def check_broker_running():
 def check_broker_api():
     """Check if Bloomberg Broker API is responding"""
     try:
-        port = int(os.getenv("BROKER_PORT", "8000"))
-        api_key = os.getenv("API_KEY", "Caeser00**")
+        port = 8000
+        api_key = "Caeser00**"
         
         response = requests.get(
             f'http://localhost:{port}/blp/fields',
@@ -88,11 +88,11 @@ def check_env_config():
     """Check environment configuration"""
     issues = []
     
-    api_key = os.getenv("API_KEY")
+    api_key = "Caeser00**"
     if not api_key:
         issues.append("API_KEY not set")
     
-    ngrok_token = os.getenv("NGROK_AUTHTOKEN")
+    ngrok_token = "32zjqBzQsKJ8Gtp9lxVMO3aqs7O_6zVut1EthKzT4cebGXwt4"
     if not ngrok_token or ngrok_token == "your_ngrok_authtoken_here":
         issues.append("NGROK_AUTHTOKEN not configured")
     
@@ -129,7 +129,7 @@ def get_system_status():
 
 def main():
     """Main status monitoring loop"""
-    load_dotenv()
+    # Configuration is hardcoded - no need to load dotenv
     
     print("Bloomberg Data Broker - System Status Monitor")
     print("=" * 60)
@@ -181,3 +181,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

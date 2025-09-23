@@ -1,0 +1,3 @@
+field_code,human_label,description,units,asset_classes,aliases
+PX_LAST,Last Price,The last traded price,Currency,Equity,last price
+DVD_EX_DT,Dividend Ex-Date,Date when dividend is excluded,Date,Equity,dividend date

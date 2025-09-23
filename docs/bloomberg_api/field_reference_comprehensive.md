@@ -1,0 +1,151 @@
+
+# Field Reference Guide
+
+## Equity Fields
+- PX_LAST: Description for PX_LAST - detailed explanation of what this field represents in Bloomberg data. This includes 1 specific details about usage, calculation method, and typical values.
+- PX_OPEN: Description for PX_OPEN - detailed explanation of what this field represents in Bloomberg data. This includes 2 specific details about usage, calculation method, and typical values.
+- PX_HIGH: Description for PX_HIGH - detailed explanation of what this field represents in Bloomberg data. This includes 3 specific details about usage, calculation method, and typical values.
+- PX_LOW: Description for PX_LOW - detailed explanation of what this field represents in Bloomberg data. This includes 4 specific details about usage, calculation method, and typical values.
+- PX_VOLUME: Description for PX_VOLUME - detailed explanation of what this field represents in Bloomberg data. This includes 5 specific details about usage, calculation method, and typical values.
+- MARKET_CAP: Description for MARKET_CAP - detailed explanation of what this field represents in Bloomberg data. This includes 6 specific details about usage, calculation method, and typical values.
+- DVD_EX_DT: Description for DVD_EX_DT - detailed explanation of what this field represents in Bloomberg data. This includes 7 specific details about usage, calculation method, and typical values.
+- DVD_SH_DT: Description for DVD_SH_DT - detailed explanation of what this field represents in Bloomberg data. This includes 8 specific details about usage, calculation method, and typical values.
+- CHG_PCT_1D: Description for CHG_PCT_1D - detailed explanation of what this field represents in Bloomberg data. This includes 9 specific details about usage, calculation method, and typical values.
+- CHG_PCT_1M: Description for CHG_PCT_1M - detailed explanation of what this field represents in Bloomberg data. This includes 10 specific details about usage, calculation method, and typical values.
+- PE_RATIO: Description for PE_RATIO - detailed explanation of what this field represents in Bloomberg data. This includes 11 specific details about usage, calculation method, and typical values.
+- PB_RATIO: Description for PB_RATIO - detailed explanation of what this field represents in Bloomberg data. This includes 12 specific details about usage, calculation method, and typical values.
+- EV_EBITDA: Description for EV_EBITDA - detailed explanation of what this field represents in Bloomberg data. This includes 13 specific details about usage, calculation method, and typical values.
+- FREE_CASH_FLOW: Description for FREE_CASH_FLOW - detailed explanation of what this field represents in Bloomberg data. This includes 14 specific details about usage, calculation method, and typical values.
+- RETURN_COM_EQY: Description for RETURN_COM_EQY - detailed explanation of what this field represents in Bloomberg data. This includes 15 specific details about usage, calculation method, and typical values.
+- BETA: Description for BETA - detailed explanation of what this field represents in Bloomberg data. This includes 16 specific details about usage, calculation method, and typical values.
+- VOLATILITY_30D: Description for VOLATILITY_30D - detailed explanation of what this field represents in Bloomberg data. This includes 17 specific details about usage, calculation method, and typical values.
+- VOLATILITY_90D: Description for VOLATILITY_90D - detailed explanation of what this field represents in Bloomberg data. This includes 18 specific details about usage, calculation method, and typical values.
+- TURNOVER: Description for TURNOVER - detailed explanation of what this field represents in Bloomberg data. This includes 19 specific details about usage, calculation method, and typical values.
+- AVG_VOLUME_30D: Description for AVG_VOLUME_30D - detailed explanation of what this field represents in Bloomberg data. This includes 20 specific details about usage, calculation method, and typical values.
+- AVG_VOLUME_90D: Description for AVG_VOLUME_90D - detailed explanation of what this field represents in Bloomberg data. This includes 21 specific details about usage, calculation method, and typical values.
+- SHARES_OUT: Description for SHARES_OUT - detailed explanation of what this field represents in Bloomberg data. This includes 22 specific details about usage, calculation method, and typical values.
+- FLOAT_SHARES: Description for FLOAT_SHARES - detailed explanation of what this field represents in Bloomberg data. This includes 23 specific details about usage, calculation method, and typical values.
+- INSTITUTIONAL_HOLDINGS_PCT: Description for INSTITUTIONAL_HOLDINGS_PCT - detailed explanation of what this field represents in Bloomberg data. This includes 24 specific details about usage, calculation method, and typical values.
+- SHORT_INTEREST: Description for SHORT_INTEREST - detailed explanation of what this field represents in Bloomberg data. This includes 25 specific details about usage, calculation method, and typical values.
+- DIVIDEND_YIELD: Description for DIVIDEND_YIELD - detailed explanation of what this field represents in Bloomberg data. This includes 26 specific details about usage, calculation method, and typical values.
+- DIVIDEND_RATE: Description for DIVIDEND_RATE - detailed explanation of what this field represents in Bloomberg data. This includes 27 specific details about usage, calculation method, and typical values.
+- EARNINGS_PER_SHARE: Description for EARNINGS_PER_SHARE - detailed explanation of what this field represents in Bloomberg data. This includes 28 specific details about usage, calculation method, and typical values.
+- BOOK_VALUE_PER_SHARE: Description for BOOK_VALUE_PER_SHARE - detailed explanation of what this field represents in Bloomberg data. This includes 29 specific details about usage, calculation method, and typical values.
+- CASH_PER_SHARE: Description for CASH_PER_SHARE - detailed explanation of what this field represents in Bloomberg data. This includes 30 specific details about usage, calculation method, and typical values.
+- SALES_PER_SHARE: Description for SALES_PER_SHARE - detailed explanation of what this field represents in Bloomberg data. This includes 31 specific details about usage, calculation method, and typical values.
+- RETURN_ON_EQUITY: Description for RETURN_ON_EQUITY - detailed explanation of what this field represents in Bloomberg data. This includes 32 specific details about usage, calculation method, and typical values.
+- RETURN_ON_ASSETS: Description for RETURN_ON_ASSETS - detailed explanation of what this field represents in Bloomberg data. This includes 33 specific details about usage, calculation method, and typical values.
+- RETURN_ON_INVESTED_CAPITAL: Description for RETURN_ON_INVESTED_CAPITAL - detailed explanation of what this field represents in Bloomberg data. This includes 34 specific details about usage, calculation method, and typical values.
+- GROSS_MARGIN: Description for GROSS_MARGIN - detailed explanation of what this field represents in Bloomberg data. This includes 35 specific details about usage, calculation method, and typical values.
+- OPERATING_MARGIN: Description for OPERATING_MARGIN - detailed explanation of what this field represents in Bloomberg data. This includes 36 specific details about usage, calculation method, and typical values.
+- NET_MARGIN: Description for NET_MARGIN - detailed explanation of what this field represents in Bloomberg data. This includes 37 specific details about usage, calculation method, and typical values.
+- EBITDA_MARGIN: Description for EBITDA_MARGIN - detailed explanation of what this field represents in Bloomberg data. This includes 38 specific details about usage, calculation method, and typical values.
+- CURRENT_RATIO: Description for CURRENT_RATIO - detailed explanation of what this field represents in Bloomberg data. This includes 39 specific details about usage, calculation method, and typical values.
+- QUICK_RATIO: Description for QUICK_RATIO - detailed explanation of what this field represents in Bloomberg data. This includes 40 specific details about usage, calculation method, and typical values.
+- DEBT_TO_EQUITY: Description for DEBT_TO_EQUITY - detailed explanation of what this field represents in Bloomberg data. This includes 41 specific details about usage, calculation method, and typical values.
+- INTEREST_COVERAGE: Description for INTEREST_COVERAGE - detailed explanation of what this field represents in Bloomberg data. This includes 42 specific details about usage, calculation method, and typical values.
+- CASH_FLOW_FROM_OPERATIONS: Description for CASH_FLOW_FROM_OPERATIONS - detailed explanation of what this field represents in Bloomberg data. This includes 43 specific details about usage, calculation method, and typical values.
+- CAPEX: Description for CAPEX - detailed explanation of what this field represents in Bloomberg data. This includes 44 specific details about usage, calculation method, and typical values.
+- FREE_CASH_FLOW_YIELD: Description for FREE_CASH_FLOW_YIELD - detailed explanation of what this field represents in Bloomberg data. This includes 45 specific details about usage, calculation method, and typical values.
+- PAYOUT_RATIO: Description for PAYOUT_RATIO - detailed explanation of what this field represents in Bloomberg data. This includes 46 specific details about usage, calculation method, and typical values.
+- 52_WEEK_HIGH: Description for 52_WEEK_HIGH - detailed explanation of what this field represents in Bloomberg data. This includes 47 specific details about usage, calculation method, and typical values.
+- 52_WEEK_LOW: Description for 52_WEEK_LOW - detailed explanation of what this field represents in Bloomberg data. This includes 48 specific details about usage, calculation method, and typical values.
+- 50_DAY_MOVING_AVG: Description for 50_DAY_MOVING_AVG - detailed explanation of what this field represents in Bloomberg data. This includes 49 specific details about usage, calculation method, and typical values.
+- 200_DAY_MOVING_AVG: Description for 200_DAY_MOVING_AVG - detailed explanation of what this field represents in Bloomberg data. This includes 50 specific details about usage, calculation method, and typical values.
+- BOLLINGER_UPPER: Description for BOLLINGER_UPPER - detailed explanation of what this field represents in Bloomberg data. This includes 51 specific details about usage, calculation method, and typical values.
+- BOLLINGER_LOWER: Description for BOLLINGER_LOWER - detailed explanation of what this field represents in Bloomberg data. This includes 52 specific details about usage, calculation method, and typical values.
+- RSI_14D: Description for RSI_14D - detailed explanation of what this field represents in Bloomberg data. This includes 53 specific details about usage, calculation method, and typical values.
+- MACD: Description for MACD - detailed explanation of what this field represents in Bloomberg data. This includes 54 specific details about usage, calculation method, and typical values.
+- STOCHASTIC_K: Description for STOCHASTIC_K - detailed explanation of what this field represents in Bloomberg data. This includes 55 specific details about usage, calculation method, and typical values.
+- STOCHASTIC_D: Description for STOCHASTIC_D - detailed explanation of what this field represents in Bloomberg data. This includes 56 specific details about usage, calculation method, and typical values.
+- WILLIAMS_R: Description for WILLIAMS_R - detailed explanation of what this field represents in Bloomberg data. This includes 57 specific details about usage, calculation method, and typical values.
+- CCI_14D: Description for CCI_14D - detailed explanation of what this field represents in Bloomberg data. This includes 58 specific details about usage, calculation method, and typical values.
+- ADX_14D: Description for ADX_14D - detailed explanation of what this field represents in Bloomberg data. This includes 59 specific details about usage, calculation method, and typical values.
+- MFI_14D: Description for MFI_14D - detailed explanation of what this field represents in Bloomberg data. This includes 60 specific details about usage, calculation method, and typical values.
+- OBV: Description for OBV - detailed explanation of what this field represents in Bloomberg data. This includes 61 specific details about usage, calculation method, and typical values.
+- ACCUMULATION_DISTRIBUTION: Description for ACCUMULATION_DISTRIBUTION - detailed explanation of what this field represents in Bloomberg data. This includes 62 specific details about usage, calculation method, and typical values.
+- ATR_14D: Description for ATR_14D - detailed explanation of what this field represents in Bloomberg data. This includes 63 specific details about usage, calculation method, and typical values.
+- BOLLINGER_BANDWIDTH: Description for BOLLINGER_BANDWIDTH - detailed explanation of what this field represents in Bloomberg data. This includes 64 specific details about usage, calculation method, and typical values.
+- STANDARD_DEVIATION_20D: Description for STANDARD_DEVIATION_20D - detailed explanation of what this field represents in Bloomberg data. This includes 65 specific details about usage, calculation method, and typical values.
+
+
+## Index Fields
+- INDX_MWEIGHT: Index field description for INDX_MWEIGHT
+- INDX_MWEIGHT_PCT: Index field description for INDX_MWEIGHT_PCT
+- INDX_LEVEL: Index field description for INDX_LEVEL
+- INDX_VOLUME: Index field description for INDX_VOLUME
+- INDX_MCAP: Index field description for INDX_MCAP
+- INDX_DIV_YIELD: Index field description for INDX_DIV_YIELD
+- INDX_PE_RATIO: Index field description for INDX_PE_RATIO
+- INDX_PB_RATIO: Index field description for INDX_PB_RATIO
+- INDX_MEMBERS: Index field description for INDX_MEMBERS
+- INDX_CHG_PCT_1D: Index field description for INDX_CHG_PCT_1D
+- INDX_CHG_PCT_1M: Index field description for INDX_CHG_PCT_1M
+- INDX_CHG_PCT_1Y: Index field description for INDX_CHG_PCT_1Y
+- INDX_VOLATILITY_30D: Index field description for INDX_VOLATILITY_30D
+- INDX_VOLATILITY_90D: Index field description for INDX_VOLATILITY_90D
+- INDX_BETA: Index field description for INDX_BETA
+- INDX_CORRELATION: Index field description for INDX_CORRELATION
+- INDX_SHARPE_RATIO: Index field description for INDX_SHARPE_RATIO
+- INDX_SORTINO_RATIO: Index field description for INDX_SORTINO_RATIO
+- INDX_MAX_DRAWDOWN: Index field description for INDX_MAX_DRAWDOWN
+- INDX_VALUE_AT_RISK: Index field description for INDX_VALUE_AT_RISK
+- INDX_TURNOVER: Index field description for INDX_TURNOVER
+- INDX_ADVANCING: Index field description for INDX_ADVANCING
+- INDX_DECLINING: Index field description for INDX_DECLINING
+- INDX_UNCHANGED: Index field description for INDX_UNCHANGED
+- INDX_NEW_HIGHS: Index field description for INDX_NEW_HIGHS
+- INDX_NEW_LOWS: Index field description for INDX_NEW_LOWS
+- INDX_52W_HIGH: Index field description for INDX_52W_HIGH
+- INDX_52W_LOW: Index field description for INDX_52W_LOW
+- INDX_WEIGHTED_AVG_MCAP: Index field description for INDX_WEIGHTED_AVG_MCAP
+- INDX_FLOAT_ADJUSTED: Index field description for INDX_FLOAT_ADJUSTED
+- INDX_DIVIDEND_POINTS: Index field description for INDX_DIVIDEND_POINTS
+- INDX_PRICE_RETURN: Index field description for INDX_PRICE_RETURN
+- INDX_TOTAL_RETURN: Index field description for INDX_TOTAL_RETURN
+- INDX_GROSS_RETURN: Index field description for INDX_GROSS_RETURN
+- INDX_NET_RETURN: Index field description for INDX_NET_RETURN
+- INDX_CURRENCY_HEDGED: Index field description for INDX_CURRENCY_HEDGED
+
+
+## Currency Fields
+- EURUSD Curncy: Currency pair EURUSD Curncy
+- GBPUSD Curncy: Currency pair GBPUSD Curncy
+- USDJPY Curncy: Currency pair USDJPY Curncy
+- AUDUSD Curncy: Currency pair AUDUSD Curncy
+- USDCAD Curncy: Currency pair USDCAD Curncy
+- USDCHF Curncy: Currency pair USDCHF Curncy
+- NZDUSD Curncy: Currency pair NZDUSD Curncy
+- USDNOK Curncy: Currency pair USDNOK Curncy
+- USDSEK Curncy: Currency pair USDSEK Curncy
+- USDMXN Curncy: Currency pair USDMXN Curncy
+- EURJPY Curncy: Currency pair EURJPY Curncy
+- EURGBP Curncy: Currency pair EURGBP Curncy
+- GBPJPY Curncy: Currency pair GBPJPY Curncy
+- AUDJPY Curncy: Currency pair AUDJPY Curncy
+- CADJPY Curncy: Currency pair CADJPY Curncy
+- CHFJPY Curncy: Currency pair CHFJPY Curncy
+- EURCHF Curncy: Currency pair EURCHF Curncy
+- GBPCHF Curncy: Currency pair GBPCHF Curncy
+- AUDCHF Curncy: Currency pair AUDCHF Curncy
+- CADCHF Curncy: Currency pair CADCHF Curncy
+- EURCAD Curncy: Currency pair EURCAD Curncy
+- GBPCAD Curncy: Currency pair GBPCAD Curncy
+- AUDCAD Curncy: Currency pair AUDCAD Curncy
+- NZDCAD Curncy: Currency pair NZDCAD Curncy
+- EURNZD Curncy: Currency pair EURNZD Curncy
+- GBPNZD Curncy: Currency pair GBPNZD Curncy
+- AUDNZD Curncy: Currency pair AUDNZD Curncy
+- EURSEK Curncy: Currency pair EURSEK Curncy
+- GBPSEK Curncy: Currency pair GBPSEK Curncy
+- USDZAR Curncy: Currency pair USDZAR Curncy
+- EURZAR Curncy: Currency pair EURZAR Curncy
+- GBPZAR Curncy: Currency pair GBPZAR Curncy
+- USDTRY Curncy: Currency pair USDTRY Curncy
+- EURTRY Curncy: Currency pair EURTRY Curncy
+- USDPLN Curncy: Currency pair USDPLN Curncy
+- EURPLN Curncy: Currency pair EURPLN Curncy
+- USDHUF Curncy: Currency pair USDHUF Curncy
+- EURHUF Curncy: Currency pair EURHUF Curncy
+- USDCZK Curncy: Currency pair USDCZK Curncy
+- EURCZK Curncy: Currency pair EURCZK Curncy

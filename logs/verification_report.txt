@@ -1,0 +1,35 @@
+=== Phase 1 Verification Results ===
+Total Chunks: 16
+Embeddings Shape: (16, 384)
+Sample Chunk: {'chunk_id': 0, 'source': 'BLPAPI Full Documentation', 'text': '# Field Reference Guide ## Equity Fields - PX_LAST: Last traded price - PX_OPEN: Opening price - PX_HIGH: High price - PX_LOW: Low price - PX_VOLUME: Trading volume - MARKET_CAP: Market capitalization - DVD_EX_DT: Dividend ex-date - DVD_SH_DT: Dividend pay date - CHG_PCT_1D: 1-day price change - CHG_PCT_1M: 1-month price change - PE_RATIO: Price to earnings ratio ## Index Fields - INDX_MWEIGHT: In', 'doc_version': 'Latest'}
+Missing Data Handling: Filled missing numerical data with means.
+
+
+=== Phase 2 Verification Results ===
+Total Queries Tested: 20
+Average Time per Query: 0.0129 seconds
+Sample Retrieval Results:
+Query: What is PX_LAST?
+Result: ## Field Categories - Pricing: PX_LAST, PX_OPEN, PX_HIGH, PX_LOW - Dividends: DVD_EX_DT, DVD_SH_DT, ...
+Score: 0.2466, Time: 0.0390s
+
+Query: What is PX_LAST?
+Result: ers - fields: List of field mnemonics - startDate: Start date for data - endDate: End date for data ...
+Score: 0.1954, Time: 0.0390s
+
+Query: What is PX_LAST?
+Result: nge rate ## Commodity Fields - CL1 Comdty: WTI Crude Oil - GC1 Comdty: Gold - SI1 Comdty: Silver ## ...
+Score: 0.1833, Time: 0.0390s
+
+Query: What is PX_LAST?
+Result: # Field Reference Guide ## Equity Fields - PX_LAST: Last traded price - PX_OPEN: Opening price - PX_...
+Score: 0.1451, Time: 0.0390s
+
+Query: What is PX_LAST?
+Result: kers - fields: List of field mnemonics ### Example Fields - PX_LAST: Last price - DVD_EX_DT: Dividen...
+Score: 0.1416, Time: 0.0390s
+
+=== Overall Assessment ===
+Phase 1: PASS - Knowledge base created successfully.
+Phase 2: PASS - Hybrid retrieval functioning.
+Recommendation: Proceed to Phase 1 Part 3.
