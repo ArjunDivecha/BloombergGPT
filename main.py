@@ -42,7 +42,12 @@ SECURITY:
 
 import os
 import datetime
-from typing import List, Dict, Optional
+from pathlib import Path
+from functools import lru_cache
+import re
+from typing import List, Dict, Optional, Tuple, Any
+
+import pandas as pd
 from fastapi import FastAPI, HTTPException, Depends, Request, status, Query
 from fastapi.security import APIKeyHeader
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -84,15 +89,196 @@ async def get_api_key(api_key: str = Depends(api_key_header)):
         raise HTTPException(status_code=401, detail="Invalid API key")
     return api_key
 
-# Allowed fields
-ALLOWED_FIELDS = ["PX_LAST", "PX_OPEN", "PX_HIGH", "PX_LOW", "VOLUME", "NAME", "MARKET_CAP"]
 
-def validate_fields(fields: List[str]) -> List[str]:
-    """Validate that all fields are in the allowed list"""
-    invalid_fields = [f for f in fields if f not in ALLOWED_FIELDS]
-    if invalid_fields:
-        raise HTTPException(status_code=400, detail=f"Invalid fields: {invalid_fields}. Allowed fields: {ALLOWED_FIELDS}")
-    return fields
+# Field catalog configuration
+FIELD_CATALOG_PATH = Path(__file__).resolve().parent / "Production Data" / "Bloomberg Master Field List.xlsx"
+FIELD_CATALOG_SHEET = os.getenv("BLOOMBERG_FIELD_SHEET", "Pruned List")
+
+
+def _normalize_field_key(value: str) -> str:
+    """Normalize field descriptors for lookup."""
+    return re.sub(r"[^a-z0-9]+", "", value.lower())
+
+
+@lru_cache(maxsize=1)
+def get_field_catalog() -> Dict[str, Any]:
+    """Load the curated Bloomberg field catalog and build lookup maps."""
+    if not FIELD_CATALOG_PATH.exists():
+        raise HTTPException(status_code=500, detail=f"Field catalog not found at {FIELD_CATALOG_PATH}")
+
+    df = pd.read_excel(FIELD_CATALOG_PATH, sheet_name=FIELD_CATALOG_SHEET)
+    if df.empty:
+        raise HTTPException(status_code=500, detail="Field catalog is empty")
+
+    df['Field ID'] = df['Field ID'].astype(str)
+    df['Display Name'] = df['Display Name'].astype(str)
+    df['Description'] = df['Description'].fillna('')
+
+    records = df.to_dict('records')
+    display_lookup: Dict[str, Dict[str, Any]] = {}
+    id_lookup: Dict[str, str] = {}
+    description_lookup: Dict[str, str] = {}
+
+    for record in records:
+        display_key = record['Display Name'].upper()
+        display_lookup[display_key] = record
+        id_lookup[record['Field ID'].upper()] = record['Display Name']
+
+        for candidate in (record['Description'], record['Display Name'], record['Field ID']):
+            normalized = _normalize_field_key(str(candidate))
+            if normalized and normalized not in description_lookup:
+                description_lookup[normalized] = record['Display Name']
+
+    sample_columns = [
+        col for col in df.columns
+        if col not in {'Field ID', 'Display Name', 'Description', 'Data Type'}
+    ]
+
+    return {
+        'dataframe': df,
+        'records': records,
+        'display_lookup': display_lookup,
+        'id_lookup': id_lookup,
+        'description_lookup': description_lookup,
+        'allowed_fields': set(display_lookup.keys()),
+        'sample_columns': sample_columns,
+    }
+
+
+def resolve_field_name(field: str) -> Tuple[str, Dict[str, Any]]:
+    """Resolve user-supplied field text to a Bloomberg display name and metadata."""
+    if not field or not field.strip():
+        raise HTTPException(status_code=400, detail="Field names cannot be empty")
+
+    catalog = get_field_catalog()
+    candidate = field.strip()
+    upper_candidate = candidate.upper()
+
+    if upper_candidate in catalog['display_lookup']:
+        record = catalog['display_lookup'][upper_candidate]
+        return record['Display Name'], record
+
+    if upper_candidate in catalog['id_lookup']:
+        display_name = catalog['id_lookup'][upper_candidate]
+        record = catalog['display_lookup'][display_name.upper()]
+        return display_name, record
+
+    normalized = _normalize_field_key(candidate)
+    if normalized in catalog['description_lookup']:
+        display_name = catalog['description_lookup'][normalized]
+        record = catalog['display_lookup'][display_name.upper()]
+        return display_name, record
+
+    raise HTTPException(status_code=400, detail=f"Field '{field}' is not in the approved Bloomberg master list")
+
+
+def validate_fields(fields: List[str]) -> Tuple[List[str], List[Dict[str, Any]]]:
+    """Validate supplied fields against the curated catalog and return resolved metadata."""
+    if not fields:
+        raise HTTPException(status_code=400, detail="At least one field is required")
+
+    resolved: List[str] = []
+    metadata: List[Dict[str, Any]] = []
+    seen = set()
+
+    for original in fields:
+        display_name, record = resolve_field_name(original)
+        if display_name not in seen:
+            seen.add(display_name)
+            resolved.append(display_name)
+            metadata.append({
+                'requested': original,
+                'display_name': display_name,
+                'field_id': _serialize_value(record.get('Field ID')),
+                'description': _serialize_value(record.get('Description')),
+                'data_type': _serialize_value(record.get('Data Type')),
+            })
+
+    return resolved, metadata
+
+
+def get_field_metadata(display_name: str) -> Dict[str, Any]:
+    """Fetch the catalog record for a Bloomberg display name."""
+    catalog = get_field_catalog()
+    record = catalog['display_lookup'].get(display_name.upper())
+    if not record:
+        raise HTTPException(status_code=500, detail=f"Metadata for field '{display_name}' not found")
+    return record
+
+
+def _serialize_value(value: Any) -> Any:
+    """Convert numpy/pandas values to plain Python types for JSON serialization."""
+    if value is None:
+        return None
+    try:
+        if pd.isna(value):
+            return None
+    except Exception:
+        pass
+    if hasattr(value, 'item'):
+        try:
+            return value.item()
+        except Exception:
+            pass
+    return value
+
+
+def get_sample_value(display_name: str, ticker: str) -> Any:
+    """Return a representative sample value for a field/ticker combination if available."""
+    catalog = get_field_catalog()
+    record = get_field_metadata(display_name)
+    sample_columns = catalog['sample_columns']
+
+    if ticker in sample_columns:
+        value = record.get(ticker)
+        serialized = _serialize_value(value)
+        if serialized is not None:
+            return serialized
+
+    ticker_upper = ticker.upper()
+    for column in sample_columns:
+        if column.upper() == ticker_upper:
+            value = record.get(column)
+            serialized = _serialize_value(value)
+            if serialized is not None:
+                return serialized
+
+    return None
+
+
+def build_mock_refdata(ticker: str, fields: List[str]) -> Dict[str, Any]:
+    """Create mock reference data using catalog samples when available."""
+    result: Dict[str, Any] = {}
+    for field in fields:
+        sample_value = get_sample_value(field, ticker)
+        if sample_value is None:
+            sample_value = f"mock:{field}"
+        result[field] = sample_value
+    return result
+
+
+def build_mock_historical(ticker: str, fields: List[str]) -> List[Dict[str, Any]]:
+    """Create mock historical data with sample values."""
+    first_snapshot = build_mock_refdata(ticker, fields)
+    second_snapshot = build_mock_refdata(ticker, fields)
+    return [
+        {"date": "2025-09-18", "values": dict(first_snapshot)},
+        {"date": "2025-09-19", "values": dict(second_snapshot)},
+    ]
+
+
+def get_default_coverage_field() -> str:
+    """Pick a reasonable default field for coverage checks."""
+    try:
+        display_name, _ = resolve_field_name('PX_LAST')
+        return display_name
+    except HTTPException:
+        catalog = get_field_catalog()
+        if not catalog['allowed_fields']:
+            raise HTTPException(status_code=500, detail="No Bloomberg fields configured")
+        arbitrary_key = next(iter(catalog['allowed_fields']))
+        record = catalog['display_lookup'][arbitrary_key]
+        return record['Display Name']
 
 # Bloomberg session setup
 def get_bloomberg_session():
@@ -318,26 +504,53 @@ def get_bloomberg_historical_data(session, ticker, fields, start_date, end_date)
 
 def create_provenance(fields: List[str], timestamp: datetime.datetime) -> str:
     """Create provenance string for responses"""
-    return f"Bloomberg (brokered via Desktop API) — fields: {fields} — retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    try:
+        descriptors = []
+        for field in fields:
+            record = get_field_metadata(field)
+            field_id = record.get('Field ID')
+            if field_id:
+                descriptors.append(f"{field} ({field_id})")
+            else:
+                descriptors.append(field)
+        fields_clause = ', '.join(descriptors) if descriptors else 'n/a'
+    except HTTPException:
+        fields_clause = ', '.join(fields) if fields else 'n/a'
+    return ("Bloomberg (brokered via Desktop API) — "
+            f"fields: {fields_clause} — retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
 
 @app.get("/blp/fields")
 @limiter.limit("60/minute")
 async def list_fields(request: Request, api_key: str = Depends(get_api_key)):
     """List allowed Bloomberg fields"""
-    fields_info = [
-        {"field": "PX_LAST", "description": "Last trade or market price"},
-        {"field": "PX_OPEN", "description": "Today's opening price"},
-        {"field": "PX_HIGH", "description": "High price for the current trading day"},
-        {"field": "PX_LOW", "description": "Low price for the current trading day"},
-        {"field": "VOLUME", "description": "Total trading volume for the current day"},
-        {"field": "NAME", "description": "Security name"},
-        {"field": "MARKET_CAP", "description": "Market capitalization"}
-    ]
+    catalog = get_field_catalog()
+    sample_columns = catalog['sample_columns']
+
+    fields_info = []
+    for record in catalog['records']:
+        entry = {
+            "field": record.get('Display Name'),
+            "field_id": record.get('Field ID'),
+            "description": record.get('Description'),
+            "data_type": record.get('Data Type'),
+        }
+        samples = {}
+        for column in sample_columns:
+            value = _serialize_value(record.get(column))
+            if value is not None:
+                samples[column] = value
+        if samples:
+            entry["sampleValues"] = samples
+        fields_info.append(entry)
+
+    fields_info.sort(key=lambda item: (item["field"] or ""))
 
     timestamp = datetime.datetime.utcnow()
     provenance = create_provenance([], timestamp)
 
     return {
+        "total": len(fields_info),
         "fields": fields_info,
         "provenance": provenance
     }
@@ -349,47 +562,59 @@ async def check_coverage(request: Request, ticker: str, api_key: str = Depends(g
     if not ticker:
         raise HTTPException(status_code=400, detail="Ticker parameter is required")
 
-    # Check coverage by attempting to get basic data from Bloomberg
+    coverage_field = get_default_coverage_field()
+
     if BLOOMBERG_AVAILABLE:
-        print(f"DEBUG: Checking Bloomberg coverage for {ticker}")
+        print(f"DEBUG: Checking Bloomberg coverage for {ticker} using field {coverage_field}")
         session = get_bloomberg_session()
         if session:
             try:
-                # Try to get a simple field to check if ticker exists
-                test_data = get_bloomberg_data(session, ticker, ["NAME"])
-                if test_data and "NAME" in test_data:
+                test_data = get_bloomberg_data(session, ticker, [coverage_field])
+                session.stop()
+                if test_data and coverage_field in test_data:
                     covered = True
-                    message = f"Data available via Bloomberg Desktop API - Security: {test_data['NAME']}"
-                    print(f"DEBUG: Coverage confirmed for {ticker}: {test_data['NAME']}")
+                    field_value = test_data.get(coverage_field)
+                    message = (
+                        "Data available via Bloomberg Desktop API "
+                        f"({coverage_field}: {field_value})"
+                    )
+                    print(f"DEBUG: Coverage confirmed for {ticker}: {field_value}")
                 else:
                     covered = False
                     message = "Security not found in Bloomberg database"
                     print(f"DEBUG: No coverage for {ticker}")
-                session.stop()
-            except HTTPException as e:
-                # Invalid ticker error from Bloomberg
+            except HTTPException as exc:
                 covered = False
-                message = e.detail
-                print(f"DEBUG: Coverage check failed for {ticker}: {e.detail}")
-            except Exception as e:
+                message = exc.detail
+                print(f"DEBUG: Coverage check failed for {ticker}: {exc.detail}")
+            except Exception as exc:
                 covered = False
                 message = "Error checking Bloomberg coverage"
-                print(f"DEBUG: Coverage check error for {ticker}: {e}")
+                print(f"DEBUG: Coverage check error for {ticker}: {exc}")
         else:
             covered = False
             message = "Bloomberg connection failed"
     else:
-        # Mock coverage - assume covered for demo tickers
-        covered = True if ticker.endswith("US Equity") else False
-        message = "Mock data mode - coverage simulation"
+        sample_value = get_sample_value(coverage_field, ticker)
+        covered = sample_value is not None or ticker.endswith("US Equity")
+        if covered and sample_value is not None:
+            message = (
+                "Mock data mode — returning catalog sample "
+                f"{coverage_field}: {sample_value}"
+            )
+        elif covered:
+            message = "Mock data mode — coverage heuristics passed"
+        else:
+            message = "Mock data mode — coverage heuristics failed"
 
     timestamp = datetime.datetime.utcnow()
-    provenance = create_provenance([], timestamp)
+    provenance = create_provenance([coverage_field], timestamp)
 
     return {
         "ticker": ticker,
         "covered": covered,
         "message": message,
+        "coverage_field": coverage_field,
         "provenance": provenance
     }
 
@@ -405,59 +630,28 @@ async def get_refdata(
     if not ticker:
         raise HTTPException(status_code=400, detail="Ticker parameter is required")
 
-    validated_fields = validate_fields(fields)
+    resolved_fields, field_metadata = validate_fields(fields)
 
-    # Get data from Bloomberg or use mock
     if BLOOMBERG_AVAILABLE:
         session = get_bloomberg_session()
         if session:
-            # Try to get real Bloomberg data
-            bloomberg_data = get_bloomberg_data(session, ticker, validated_fields)
-            if bloomberg_data:
-                data = bloomberg_data
-            else:
-                # Fallback to mock data if Bloomberg fails
-                data = {
-                    "PX_LAST": "175.45",
-                    "PX_OPEN": "173.50",
-                    "PX_HIGH": "176.20",
-                    "PX_LOW": "172.80",
-                    "VOLUME": "58390000",
-                    "NAME": "Apple Inc",
-                    "MARKET_CAP": "2800000000000"
-                }
+            data = get_bloomberg_data(session, ticker, resolved_fields) or build_mock_refdata(ticker, resolved_fields)
             session.stop()
         else:
-            # Bloomberg session failed, use mock data
-            data = {
-                "PX_LAST": "175.45",
-                "PX_OPEN": "173.50",
-                "PX_HIGH": "176.20",
-                "PX_LOW": "172.80",
-                "VOLUME": "58390000",
-                "NAME": "Apple Inc",
-                "MARKET_CAP": "2800000000000"
-            }
+            data = build_mock_refdata(ticker, resolved_fields)
     else:
-        # Use mock data for development
-        data = {
-            "PX_LAST": "175.45",
-            "PX_OPEN": "173.50",
-            "PX_HIGH": "176.20",
-            "PX_LOW": "172.80",
-            "VOLUME": "58390000",
-            "NAME": "Apple Inc",
-            "MARKET_CAP": "2800000000000"
-        }
+        data = build_mock_refdata(ticker, resolved_fields)
 
-    filtered_data = {k: v for k, v in data.items() if k in validated_fields}
+    filtered_data = {field: data.get(field) for field in resolved_fields}
 
     timestamp = datetime.datetime.utcnow()
-    provenance = create_provenance(validated_fields, timestamp)
+    provenance = create_provenance(resolved_fields, timestamp)
 
     return {
         "ticker": ticker,
-        "fields": filtered_data,
+        "fields": resolved_fields,
+        "resolved_fields": field_metadata,
+        "data": filtered_data,
         "provenance": provenance
     }
 
@@ -477,127 +671,42 @@ async def get_historical(
     if not start_date:
         raise HTTPException(status_code=400, detail="Start date is required")
 
-    validated_fields = validate_fields(fields)
+    resolved_fields, field_metadata = validate_fields(fields)
 
-    # Set default end_date to today if not provided
     if not end_date:
         end_date = datetime.date.today().isoformat()
 
-    # Get historical data from Bloomberg or use mock
     if BLOOMBERG_AVAILABLE:
-        print(f"DEBUG: Attempting to get Bloomberg historical data for {ticker} with fields {validated_fields}")
+        print(f"DEBUG: Attempting to get Bloomberg historical data for {ticker} with fields {resolved_fields}")
         print(f"DEBUG: Date range: {start_date} to {end_date}")
         session = get_bloomberg_session()
         if session:
             print("DEBUG: Bloomberg historical session created successfully")
-            # Try to get real Bloomberg historical data
-            bloomberg_historical = get_bloomberg_historical_data(session, ticker, validated_fields, start_date, end_date)
-            if bloomberg_historical:
-                print(f"DEBUG: Got real Bloomberg historical data: {len(bloomberg_historical)} records")
-                historical_data = bloomberg_historical
-                session.stop()
-            else:
-                print("DEBUG: Bloomberg historical data request failed, using mock data")
-                session.stop()
-                # Fallback to mock data if Bloomberg fails
-                historical_data = [
-                    {
-                        "date": "2025-09-18",
-                        "values": {
-                            "PX_LAST": 174.12,
-                            "PX_OPEN": 172.50,
-                            "PX_HIGH": 175.00,
-                            "PX_LOW": 171.80,
-                            "VOLUME": 58230000,
-                            "NAME": "Apple Inc",
-                            "MARKET_CAP": "2780000000000"
-                        }
-                    },
-                    {
-                        "date": "2025-09-19",
-                        "values": {
-                            "PX_LAST": 175.45,
-                            "PX_OPEN": 173.50,
-                            "PX_HIGH": 176.20,
-                            "PX_LOW": 172.80,
-                            "VOLUME": 58390000,
-                            "NAME": "Apple Inc",
-                            "MARKET_CAP": "2800000000000"
-                        }
-                    }
-                ]
+            historical_data = get_bloomberg_historical_data(session, ticker, resolved_fields, start_date, end_date)
+            session.stop()
         else:
-            print("DEBUG: Bloomberg historical session creation failed, using mock data")
-            # Bloomberg session failed, use mock data
-            historical_data = [
-                {
-                    "date": "2025-09-18",
-                    "values": {
-                        "PX_LAST": 174.12,
-                        "PX_OPEN": 172.50,
-                        "PX_HIGH": 175.00,
-                        "PX_LOW": 171.80,
-                        "VOLUME": 58230000,
-                        "NAME": "Apple Inc",
-                        "MARKET_CAP": "2780000000000"
-                    }
-                },
-                {
-                    "date": "2025-09-19",
-                    "values": {
-                        "PX_LAST": 175.45,
-                        "PX_OPEN": 173.50,
-                        "PX_HIGH": 176.20,
-                        "PX_LOW": 172.80,
-                        "VOLUME": 58390000,
-                        "NAME": "Apple Inc",
-                        "MARKET_CAP": "2800000000000"
-                    }
-                }
-            ]
+            historical_data = None
+        if not historical_data:
+            print("DEBUG: Historical request failed or returned no data, using mock values")
+            historical_data = build_mock_historical(ticker, resolved_fields)
     else:
-        # Use mock data for development
-        historical_data = [
-            {
-                "date": "2025-09-18",
-                "values": {
-                    "PX_LAST": 174.12,
-                    "PX_OPEN": 172.50,
-                    "PX_HIGH": 175.00,
-                    "PX_LOW": 171.80,
-                    "VOLUME": 58230000,
-                    "NAME": "Apple Inc",
-                    "MARKET_CAP": "2780000000000"
-                }
-            },
-            {
-                "date": "2025-09-19",
-                "values": {
-                    "PX_LAST": 175.45,
-                    "PX_OPEN": 173.50,
-                    "PX_HIGH": 176.20,
-                    "PX_LOW": 172.80,
-                    "VOLUME": 58390000,
-                    "NAME": "Apple Inc",
-                    "MARKET_CAP": "2800000000000"
-                }
-            }
-        ]
+        historical_data = build_mock_historical(ticker, resolved_fields)
 
     filtered_data = [
         {
             "date": item["date"],
-            "values": {k: v for k, v in item["values"].items() if k in validated_fields}
+            "values": {field: item.get("values", {}).get(field) for field in resolved_fields}
         }
         for item in historical_data
     ]
 
     timestamp = datetime.datetime.utcnow()
-    provenance = create_provenance(validated_fields, timestamp)
+    provenance = create_provenance(resolved_fields, timestamp)
 
     return {
         "ticker": ticker,
-        "fields": validated_fields,
+        "fields": resolved_fields,
+        "resolved_fields": field_metadata,
         "data": filtered_data,
         "provenance": provenance
     }
