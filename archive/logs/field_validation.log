@@ -1,0 +1,17 @@
+2025-09-24 15:17:41,035 - INFO - Loaded 17615 fields from catalog
+2025-09-24 15:17:41,213 - INFO - Bloomberg session ready for reference data requests
+2025-09-24 15:17:41,214 - INFO - Validating 17615 fields for AAPL US Equity (equity)
+2025-09-24 15:22:24,622 - INFO - Validating 17615 fields for SPX Index (index)
+2025-09-24 15:25:38,331 - INFO - Validating 17615 fields for CL1 Comdty (commodity)
+2025-09-24 15:29:40,084 - INFO - Validating 17615 fields for EURUSD Curncy (currency)
+2025-09-24 15:31:57,723 - INFO - Validating 17615 fields for USGG10YR Index (rates)
+2025-09-24 15:34:03,301 - INFO - Bloomberg session stopped
+2025-09-24 15:34:03,523 - INFO - Validation results written to \\Mac\Dropbox-1\AAA Backup\A Working\BloombergGPT\data\field_validation_results.csv
+2025-09-24 15:34:03,560 - INFO - Summary by security:
+status          error  no_value  value
+security                              
+AAPL US Equity   4758      9058   3799
+CL1 Comdty      16170      1088    357
+EURUSD Curncy   16216      1093    306
+SPX Index       14362      2598    655
+USGG10YR Index  15604      1747    264

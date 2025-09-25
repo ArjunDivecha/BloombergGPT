@@ -6,8 +6,8 @@ info:
     Bloomberg Data Broker - UNRESTRICTED.
     Any field allowed; field list driven by the curated master catalog.
 servers:
-  - url: https://4ef9477d7749.ngrok-free.app
-    description: Bloomberg Data Broker via ngrok tunnel - UNRESTRICTED
+  - url: https://broker.dancing-ganesh.com
+    description: Bloomberg Data Broker via Cloudflare tunnel - UNRESTRICTED
 security:
   - ApiKeyAuth: []
 components:

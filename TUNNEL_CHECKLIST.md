@@ -1,55 +1,61 @@
-# TUNNEL CHECKLIST - Secure Tunnel Setup for Bloomberg Data Broker
+# Tunnel Checklist – Cloudflare Tunnel for Bloomberg Data Broker
 
 ## Overview
-This checklist provides step-by-step instructions to set up a secure tunnel to expose your local Bloomberg Data Broker over HTTPS. This allows ChatGPT to access the broker securely from the internet.
+Use Cloudflare Tunnel (cloudflared) to expose the Bloomberg Data Broker over HTTPS with a permanent hostname.
 
 ## Prerequisites
-- Bloomberg Data Broker (main.py) running successfully on localhost:8000
-- Internet connection for tunnel service
-- Ngrok account (free tier available) or similar tunneling service
+- Bloomberg Data Broker (`main.py`) runs on `http://localhost:8000`
+- Cloudflare account with your domain onboarded (nameservers pointing to Cloudflare)
+- `cloudflared.exe` available in the repository
 
-## Step 1: Install Ngrok
-1. Download Ngrok from https://ngrok.com/download
-2. Unzip and install on your system
-3. Sign up for a free account at https://ngrok.com
-4. Get your authtoken from the dashboard
+## Step 1 – Log in cloudflared
+```powershell
+cloudflared.exe tunnel login
+```
+Approve the browser prompt so Cloudflare issues a certificate in `%USERPROFILE%\.cloudflared`.
 
-## Step 2: Configure Ngrok
-1. Add your authtoken:
-   ```
-   ngrok config add-authtoken YOUR_AUTHTOKEN_HERE
-   ```
+## Step 2 – Create the tunnel
+```powershell
+cloudflared.exe tunnel create bloomberg-broker
+```
+Note the credentials file path that is printed (e.g., `C:\Users\user\.cloudflared\<uuid>.json`).
 
-## Step 3: Start the Tunnel
-1. Run the broker server (if not already running):
-   ```
-   python main.py
-   ```
-2. In a new terminal, start ngrok tunnel:
-   ```
-   ngrok http 8000
-   ```
+## Step 3 – Configure DNS
+```powershell
+cloudflared.exe tunnel route dns bloomberg-broker broker.your-domain.com
+```
+(or edit the CNAME in the Cloudflare dashboard to point to `<tunnel-id>.cfargotunnel.com`).
 
-## Step 4: Verify the Tunnel
-1. Check the ngrok output for your HTTPS URL (e.g., https://abc123.ngrok.io)
-2. Test the tunnel by accessing the endpoints with your API key:
-   ```
-   curl -H "x-api-key: your-secret-key" https://abc123.ngrok.io/blp/fields
-   ```
-3. Ensure all responses work correctly
+## Step 4 – Create config file
+Create `cloudflared-broker.yml` (for example in `Documents`):
+```yaml
+tunnel: bloomberg-broker
+credentials-file: C:\Users\user\.cloudflared\<uuid>.json
+ingress:
+  - hostname: broker.your-domain.com
+    service: http://localhost:8000
+  - service: http_status:404
+```
 
-## Step 5: Configure ChatGPT Action
-1. In your ChatGPT Custom GPT configuration, set the base URL to your ngrok HTTPS URL
-2. Ensure the API key is configured correctly
-3. Test the integration
+## Step 5 – Start the tunnel
+- Manual run:
+  ```powershell
+  cloudflared.exe tunnel --config "C:\Users\user\Documents\cloudflared-broker.yml" run bloomberg-broker
+  ```
+- Or double-click `start_cloudflared.bat`, which wraps the command.
 
-## Security Notes
-- Use HTTPS URLs only
-- Monitor ngrok usage for rate limits
-- Consider upgrading to ngrok paid plan for custom domains if needed
-- Rotate API keys regularly
+## Step 6 – Verify
+Visit `https://broker.your-domain.com/blp/fields?limit=1` (with the `x-api-key` header). You should see the expected JSON or an authentication response.
+
+## Step 7 – Update API Schema / GPT Config
+Set the server URL to `https://broker.your-domain.com` in `Production Data/Schema.yaml` and in your ChatGPT Custom GPT configuration.
+
+## Notes
+- Keep the PowerShell / batch window running while you need the tunnel.
+- Optionally install cloudflared as a Windows service: `cloudflared.exe service install --config <path> --name cloudflared-broker`.
+- Stop the tunnel with `Ctrl+C` or `taskkill /IM cloudflared.exe`.
 
 ## Troubleshooting
-- If tunnel fails, check firewall settings
-- Ensure Bloomberg Terminal is running
-- Verify API key matches in both broker and ChatGPT configuration
+- Run `tasklist | findstr cloudflared.exe` to confirm the tunnel process.
+- Ensure the credentials JSON path in the config matches the value printed in Step 2.
+- DNS changes can take a few minutes to propagate—verify the CNAME in the Cloudflare dashboard if the hostname does not resolve.

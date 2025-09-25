@@ -5,106 +5,78 @@ echo Bloomberg Data Broker Environment Setup
 echo ==========================================
 echo.
 
-echo This script will set up your Bloomberg Data Broker environment.
+echo This script installs Python dependencies, creates configuration files,
+echo and adds desktop shortcuts for starting/stopping the system.
 echo.
-echo Prerequisites:
-echo - Python 3.8+ installed
-echo - Bloomberg Terminal installed and running
-echo - Internet connection for downloading packages
-echo.
-set /p continue="Continue with setup? (Y/N): "
-if /i not "%continue%"=="Y" exit /b
+set /p CONTINUE="Continue with setup? (Y/N): "
+if /I not "%CONTINUE%"=="Y" exit /b
 
 echo.
 echo [1/4] Installing Python dependencies...
 pip install -r requirements.txt
 if %errorlevel% neq 0 (
-    echo ✗ Failed to install Python dependencies
+    echo [ERR] Failed to install Python packages
     pause
     exit /b 1
 )
-echo ✓ Python dependencies installed
+echo [OK] Python dependencies installed
 
 echo.
-echo [2/4] Installing Bloomberg API...
+echo [2/4] Installing Bloomberg API Python bindings (if available)...
 python -m pip install --index-url=https://blpapi.bloomberg.com/repository/releases/python/simple/ blpapi
 if %errorlevel% neq 0 (
-    echo ⚠ Bloomberg API installation failed
-    echo This is normal if you don't have Bloomberg access
-    echo The system will use mock data instead
+    echo [WARN] Bloomberg API installation failed (mock mode will be used)
 ) else (
-    echo ✓ Bloomberg API installed
+    echo [OK] Bloomberg API installed
 )
 
 echo.
-echo [2.5/4] Setting up configuration file...
+echo [3/4] Preparing .env configuration...
 if not exist ".env" (
     if exist "env.template" (
         copy "env.template" ".env" >nul
-        echo ✓ Created .env from template
-        echo ⚠ IMPORTANT: Edit .env file and add your NGROK_AUTHTOKEN
-        echo   Get it from: https://dashboard.ngrok.com/get-started/your-authtoken
+        echo [OK] Created .env from env.template
+        echo Please edit .env to set a secure API_KEY if needed.
     ) else (
-        echo API_KEY=Caeser00** > .env
-        echo NGROK_AUTHTOKEN=your_ngrok_authtoken_here >> .env
-        echo NGROK_REGION=us >> .env
-        echo BLOOMBERG_HOST=localhost >> .env
-        echo BLOOMBERG_PORT=8194 >> .env
-        echo BROKER_HOST=0.0.0.0 >> .env
-        echo BROKER_PORT=8000 >> .env
-        echo RATE_LIMIT=60/minute >> .env
-        echo ✓ Created .env with default settings
-        echo ⚠ IMPORTANT: Edit .env file and add your NGROK_AUTHTOKEN
+        (
+            echo API_KEY=Caeser00**
+            echo BLOOMBERG_HOST=localhost
+            echo BLOOMBERG_PORT=8194
+            echo BROKER_HOST=0.0.0.0
+            echo BROKER_PORT=8000
+            echo RATE_LIMIT=60/minute
+        )> .env
+        echo [OK] Created .env with default settings
     )
 ) else (
-    echo ℹ .env file already exists
+    echo [INFO] Existing .env detected (leaving unchanged)
 )
 
 echo.
-echo [3/4] Testing Bloomberg connection...
-python -c "
-try:
-    import blpapi
-    sessionOptions = blpapi.SessionOptions()
-    sessionOptions.setServerHost('localhost')
-    sessionOptions.setServerPort(8194)
-    session = blpapi.Session(sessionOptions)
-    if session.start():
-        print('✓ Bloomberg Terminal connection successful')
-        session.stop()
-    else:
-        print('✗ Bloomberg Terminal connection failed')
-        print('Make sure Bloomberg Terminal is running and logged in')
-except ImportError:
-    print('⚠ Bloomberg API not available - will use mock data')
-except Exception as e:
-    print('✗ Bloomberg connection error:', str(e))
-"
-
-echo.
 echo [4/4] Creating desktop shortcuts...
-echo Set oWS = WScript.CreateObject("WScript.Shell") > create_shortcuts.vbs
-echo sLinkFile = "%USERPROFILE%\Desktop\Start Bloomberg Broker.lnk" >> create_shortcuts.vbs
-echo Set oLink = oWS.CreateShortcut(sLinkFile) >> create_shortcuts.vbs
-echo oLink.TargetPath = "%~dp0start_bloomberg_broker.bat" >> create_shortcuts.vbs
-echo oLink.WorkingDirectory = "%~dp0" >> create_shortcuts.vbs
-echo oLink.Description = "Start Bloomberg Data Broker System" >> create_shortcuts.vbs
-echo oLink.Save >> create_shortcuts.vbs
+set VBS=create_shortcuts.vbs
+(
+    echo Set oWS = WScript.CreateObject("WScript.Shell")
+    echo sLink = "%USERPROFILE%\Desktop\Start Bloomberg Broker.lnk"
+    echo Set oLnk = oWS.CreateShortcut(sLink)
+    echo oLnk.TargetPath = "%~dp0start_bloomberg_broker.bat"
+    echo oLnk.WorkingDirectory = "%~dp0"
+    echo oLnk.Description = "Start Bloomberg Data Broker"
+    echo oLnk.Save
+    echo sLink = "%USERPROFILE%\Desktop\Stop Bloomberg Broker.lnk"
+    echo Set oLnk = oWS.CreateShortcut(sLink)
+    echo oLnk.TargetPath = "%~dp0stop_bloomberg_broker.bat"
+    echo oLnk.WorkingDirectory = "%~dp0"
+    echo oLnk.Description = "Stop Bloomberg Data Broker"
+    echo oLnk.Save
+) > %VBS%
 
-echo sLinkFile = "%USERPROFILE%\Desktop\Stop Bloomberg Broker.lnk" >> create_shortcuts.vbs
-echo Set oLink = oWS.CreateShortcut(sLinkFile) >> create_shortcuts.vbs
-echo oLink.TargetPath = "%~dp0stop_bloomberg_broker.bat" >> create_shortcuts.vbs
-echo oLink.WorkingDirectory = "%~dp0" >> create_shortcuts.vbs
-echo oLink.Description = "Stop Bloomberg Data Broker System" >> create_shortcuts.vbs
-echo oLink.Save >> create_shortcuts.vbs
-
-cscript create_shortcuts.vbs >nul 2>&1
-del create_shortcuts.vbs >nul 2>&1
-
+cscript %VBS% >nul 2>&1
+del %VBS% >nul 2>&1
 if exist "%USERPROFILE%\Desktop\Start Bloomberg Broker.lnk" (
-    echo ✓ Desktop shortcuts created
+    echo [OK] Desktop shortcuts created
 ) else (
-    echo ⚠ Could not create desktop shortcuts
+    echo [WARN] Could not create desktop shortcuts
 )
 
 echo.
@@ -112,17 +84,9 @@ echo ==========================================
 echo Setup Complete!
 echo ==========================================
 echo.
-echo Your Bloomberg Data Broker is ready to use!
-echo.
-echo Quick Start:
-echo 1. Make sure Bloomberg Terminal is running and logged in
-echo 2. Double-click "Start Bloomberg Broker" on your desktop
-echo 3. Use your Bloomberg ChatGPT!
-echo.
-echo Files created:
-echo - start_bloomberg_broker.bat (Start system)
-echo - stop_bloomberg_broker.bat (Stop system)
-echo - check_status.bat (Check system status)
-echo - Desktop shortcuts for easy access
+echo Next steps:
+echo 1. Ensure your Cloudflare tunnel config (cloudflared-broker.yml) is ready.
+echo 2. Launch Bloomberg Terminal and log in.
+echo 3. Use the desktop shortcut "Start Bloomberg Broker" to begin a session.
 echo.
 pause

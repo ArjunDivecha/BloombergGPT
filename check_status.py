@@ -1,183 +1,182 @@
 #!/usr/bin/env python3
 """
 Bloomberg Data Broker System Status Monitor
-Real-time monitoring of all system components
 """
 
 import os
-import sys
 import time
-import requests
 import subprocess
+from typing import Tuple, List
+
+import requests
 from dotenv import load_dotenv
 
-def clear_screen():
-    """Clear the terminal screen"""
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+
+def clear_screen() -> None:
+    """Clear the terminal screen."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def check_bloomberg_api():
-    """Check if Bloomberg API is available"""
-    try:
-        import blpapi
-        return True, "✅ Bloomberg API available"
-    except ImportError:
-        return False, "❌ Bloomberg API not installed"
 
-def check_bloomberg_connection():
-    """Check Bloomberg Terminal connection"""
+def check_bloomberg_api() -> Tuple[bool, str]:
+    """Check whether the Bloomberg Desktop API library is importable."""
+    try:
+        import blpapi  # noqa: F401 - imported only to confirm availability
+        return True, "[OK] Bloomberg API Python bindings installed"
+    except ImportError:
+        return False, "[ERR] Bloomberg API Python bindings missing"
+
+
+def check_bloomberg_connection() -> Tuple[bool, str]:
+    """Attempt to open a short Bloomberg session to confirm connectivity."""
     try:
         import blpapi
-        sessionOptions = blpapi.SessionOptions()
-        sessionOptions.setServerHost(os.getenv("BLOOMBERG_HOST", "localhost"))
-        sessionOptions.setServerPort(int(os.getenv("BLOOMBERG_PORT", "8194")))
-        session = blpapi.Session(sessionOptions)
-        
+
+        host = os.getenv("BLOOMBERG_HOST", "localhost")
+        port = int(os.getenv("BLOOMBERG_PORT", "8194"))
+
+        session_options = blpapi.SessionOptions()
+        session_options.setServerHost(host)
+        session_options.setServerPort(port)
+
+        session = blpapi.Session(session_options)
         if session.start():
             session.stop()
-            return True, "✅ Bloomberg Terminal connected"
-        else:
-            return False, "❌ Bloomberg Terminal not responding"
-    except Exception as e:
-        return False, f"❌ Bloomberg connection error: {str(e)[:50]}"
+            return True, f"[OK] Bloomberg Terminal reachable at {host}:{port}"
+        return False, "[ERR] Bloomberg Terminal not responding"
+    except Exception as exc:  # pragma: no cover - only triggered on failure
+        return False, f"[ERR] Bloomberg connection error: {exc}"[:80]
 
-def check_broker_running():
-    """Check if Bloomberg Broker is running"""
+
+def check_broker_running() -> Tuple[bool, str]:
+    """Inspect whether a process is bound to the broker port."""
     port = int(os.getenv("BROKER_PORT", "8000"))
     try:
-        result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True, timeout=5)
-        if f":{port}" in result.stdout:
-            return True, f"✅ Bloomberg Broker running on port {port}"
-        else:
-            return False, f"❌ Bloomberg Broker not running on port {port}"
-    except:
-        return False, "❌ Cannot check broker status"
-
-def check_broker_api():
-    """Check if Bloomberg Broker API is responding"""
-    try:
-        port = int(os.getenv("BROKER_PORT", "8000"))
-        api_key = os.getenv("API_KEY", "Caeser00**")
-        
-        response = requests.get(
-            f'http://localhost:{port}/blp/fields',
-            headers={'x-api-key': api_key},
-            timeout=5
+        result = subprocess.run(
+            ['netstat', '-ano'],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
-        
-        if response.status_code == 200:
-            return True, "✅ Broker API responding correctly"
-        else:
-            return False, f"❌ Broker API error (HTTP {response.status_code})"
-    except requests.exceptions.ConnectionError:
-        return False, "❌ Broker API not responding (connection refused)"
-    except Exception as e:
-        return False, f"❌ Broker API error: {str(e)[:50]}"
+        if f":{port}" in result.stdout:
+            return True, f"[OK] Bloomerg broker service listening on port {port}"
+        return False, f"[WARN] No process listening on port {port}"
+    except Exception:
+        return False, "[ERR] Unable to query local ports"
 
-def check_ngrok_running():
-    """Check if ngrok is running"""
+
+def check_broker_api() -> Tuple[bool, str]:
+    """Hit the broker REST API to confirm HTTP availability."""
+    port = int(os.getenv("BROKER_PORT", "8000"))
+    api_key = os.getenv("API_KEY", "")
     try:
-        result = subprocess.run(['tasklist'], capture_output=True, text=True, timeout=5)
-        if 'ngrok.exe' in result.stdout:
-            return True, "✅ ngrok tunnel running"
-        else:
-            return False, "❌ ngrok tunnel not running"
-    except:
-        return False, "❌ Cannot check ngrok status"
+        response = requests.get(
+            f"http://localhost:{port}/blp/fields",
+            headers={'x-api-key': api_key} if api_key else {},
+            timeout=5,
+        )
+        if response.status_code == 200:
+            return True, "[OK] Broker API responding"
+        return False, f"[WARN] Broker API returned HTTP {response.status_code}"
+    except requests.exceptions.ConnectionError:
+        return False, "[ERR] Broker API connection refused"
+    except Exception as exc:  # pragma: no cover - unexpected error
+        return False, f"[ERR] Broker API error: {exc}"[:80]
 
-def check_env_config():
-    """Check environment configuration"""
-    issues = []
-    
-    api_key = os.getenv("API_KEY")
-    if not api_key:
+
+def check_cloudflared_running() -> Tuple[bool, str]:
+    """Verify that the Cloudflare tunnel process is active."""
+    try:
+        result = subprocess.run(
+            ['tasklist'], capture_output=True, text=True, timeout=5
+        )
+        if 'cloudflared.exe' in result.stdout:
+            return True, "[OK] Cloudflare tunnel running"
+        return False, "[WARN] Cloudflare tunnel not detected"
+    except Exception:
+        return False, "[ERR] Unable to check Cloudflare tunnel"
+
+
+def check_env_config() -> Tuple[bool, str]:
+    """Confirm essential environment variables are present."""
+    issues: List[str] = []
+
+    if not os.getenv("API_KEY"):
         issues.append("API_KEY not set")
-    
-    ngrok_token = os.getenv("NGROK_AUTHTOKEN")
-    if not ngrok_token or ngrok_token == "your_ngrok_authtoken_here":
-        issues.append("NGROK_AUTHTOKEN not configured")
-    
-    if issues:
-        return False, f"❌ Config issues: {', '.join(issues)}"
-    else:
-        return True, "✅ Configuration valid"
 
-def get_system_status():
-    """Get overall system status"""
+    if issues:
+        return False, "[WARN] Config issues: " + ", ".join(issues)
+    return True, "[OK] Environment configuration looks good"
+
+
+def gather_status() -> Tuple[List[Tuple[str, bool, str]], bool]:
+    """Run all health checks and return the combined status."""
     checks = [
-        ("Environment Config", check_env_config),
+        ("Environment", check_env_config),
         ("Bloomberg API", check_bloomberg_api),
         ("Bloomberg Connection", check_bloomberg_connection),
         ("Broker Process", check_broker_running),
         ("Broker API", check_broker_api),
-        ("ngrok Tunnel", check_ngrok_running),
+        ("Cloudflare Tunnel", check_cloudflared_running),
     ]
-    
-    results = []
+
+    results: List[Tuple[str, bool, str]] = []
     all_ok = True
-    
-    for name, check_func in checks:
+
+    for label, check in checks:
         try:
-            status, message = check_func()
-            results.append((name, status, message))
+            status, message = check()
+            results.append((label, status, message))
             if not status:
                 all_ok = False
-        except Exception as e:
-            results.append((name, False, f"❌ Error: {str(e)[:50]}"))
+        except Exception as exc:  # pragma: no cover - safeguard
+            results.append((label, False, f"[ERR] {exc}"[:80]))
             all_ok = False
-    
+
     return results, all_ok
 
-def main():
-    """Main status monitoring loop"""
+
+# ---------------------------------------------------------------------------
+# Main loop
+# ---------------------------------------------------------------------------
+
+def main() -> None:
     load_dotenv()
-    
+
     print("Bloomberg Data Broker - System Status Monitor")
     print("=" * 60)
-    print("Press Ctrl+C to exit")
-    print()
-    
+    print("Press Ctrl+C to exit.\n")
+
     try:
         while True:
             clear_screen()
-            
-            print("🔍 Bloomberg Data Broker System Status")
+            print("Bloomberg Data Broker - System Status")
             print("=" * 50)
-            print(f"⏰ Last Update: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"Last Update: {time.strftime('%Y-%m-%d %H:%M:%S')}")
             print()
-            
-            # Get system status
-            results, all_ok = get_system_status()
-            
-            # Display results
-            for name, status, message in results:
-                print(f"{name:20} {message}")
-            
-            print()
+
+            results, all_ok = gather_status()
+            for label, _, message in results:
+                print(f"{label:20} {message}")
+
             print("=" * 50)
-            
             if all_ok:
-                print("🎉 System Status: ALL SYSTEMS OPERATIONAL")
-                print("🚀 Your Bloomberg ChatGPT is ready to use!")
+                print("OVERALL: ALL SYSTEMS OPERATIONAL")
             else:
-                print("⚠️  System Status: ISSUES DETECTED")
-                print("💡 Check the errors above and restart components as needed")
-            
+                print("OVERALL: CHECK WARNINGS ABOVE")
             print()
-            print("Commands:")
-            print("- Start System: start_bloomberg_broker.bat")
-            print("- Stop System: stop_bloomberg_broker.bat")
-            print("- This updates every 10 seconds")
+            print("Commands: start_bloomberg_broker.bat | stop_bloomberg_broker.bat")
             print()
-            
-            # Wait 10 seconds before next check
-            for i in range(10, 0, -1):
-                print(f"\rNext update in {i} seconds... ", end="", flush=True)
+
+            for remaining in range(10, 0, -1):
+                print(f"\rNext update in {remaining} seconds... ", end="", flush=True)
                 time.sleep(1)
             print()
-            
     except KeyboardInterrupt:
-        print("\n\n👋 System monitoring stopped")
-        print("Bloomberg Data Broker may still be running")
+        print("\nSystem monitoring stopped.")
+
 
 if __name__ == "__main__":
     main()
