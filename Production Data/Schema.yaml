@@ -213,7 +213,7 @@ paths:
             minimum: 1
             maximum: 500
             default: 15
-          description: Maximum number of securities returned
+          description: Maximum number of securities to include in the response
       responses:
         '200':
           description: Matching Bloomberg securities
@@ -226,10 +226,17 @@ paths:
                     type: string
                   total:
                     type: integer
+                    description: Total number of matching securities after de-duplication
+                  returned:
+                    type: integer
+                    description: Number of securities included in this response
                   results:
                     type: array
                     items:
                       $ref: '#/components/schemas/SecurityInfo'
+                  message:
+                    type: string
+                    description: Returned when no securities are available for the supplied query
                   provenance:
                     type: string
   /blp/coverage:

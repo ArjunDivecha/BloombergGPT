@@ -12,11 +12,12 @@ DESCRIPTION:
 This script implements a secure FastAPI server that acts as a broker for Bloomberg Desktop API.
 It enforces field allow-list, authentication, and rate limiting to comply with Bloomberg licensing.
 
-The server provides four main endpoints:
+The server provides five endpoints:
 1. /blp/refdata - Current reference data for a ticker
 2. /blp/historical - Historical time-series data for a ticker
 3. /blp/fields - List of allowed Bloomberg fields
 4. /blp/coverage - Check Bloomberg coverage for a ticker
+5. /blp/securities - Search Bloomberg instruments (SECF-style)
 
 REQUIREMENTS:
 - Bloomberg Terminal must be running and logged in
@@ -24,6 +25,7 @@ REQUIREMENTS:
 - Rate limiting: 60 requests per minute per API key
 
 VERSION HISTORY:
+- Version 2.1.0 - Expanded field filters and securities search endpoint (2025-09-25)
 - Version 1.0.0 - Initial implementation (2025-09-21)
 
 CONFIGURATION:
@@ -68,7 +70,7 @@ except ImportError:
 load_dotenv()
 
 # Initialize FastAPI app
-app = FastAPI(title="Bloomberg Data Broker", version="1.0.0")
+app = FastAPI(title="Bloomberg Data Broker", version="2.1.0")
 
 # Rate limiting setup
 limiter = Limiter(key_func=get_remote_address)
@@ -182,9 +184,15 @@ def validate_fields(fields: List[str]) -> Tuple[List[str], List[Dict[str, Any]]]
     seen = set()
 
     for original in fields:
-        display_name, record = resolve_field_name(original)
-        if display_name not in seen:
-            seen.add(display_name)
+        candidate = original.strip() if isinstance(original, str) else ''
+        if not candidate:
+            raise HTTPException(status_code=400, detail="Field names cannot be empty")
+        try:
+            display_name, record = resolve_field_name(candidate)
+            normalized = display_name.upper()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
             resolved.append(display_name)
             metadata.append({
                 'requested': original,
@@ -192,6 +200,19 @@ def validate_fields(fields: List[str]) -> Tuple[List[str], List[Dict[str, Any]]]
                 'field_id': _serialize_value(record.get('Field ID')),
                 'description': _serialize_value(record.get('Description')),
                 'data_type': _serialize_value(record.get('Data Type')),
+            })
+        except HTTPException:
+            normalized = candidate.upper()
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            resolved.append(candidate)
+            metadata.append({
+                'requested': original,
+                'display_name': candidate,
+                'field_id': None,
+                'description': "Not in catalog - forwarded as supplied",
+                'data_type': None,
             })
 
     return resolved, metadata
@@ -221,29 +242,6 @@ def _serialize_value(value: Any) -> Any:
         except Exception:
             pass
     return value
-
-
-def get_sample_value(display_name: str, ticker: str) -> Any:
-    """Return a representative sample value for a field/ticker combination if available."""
-    catalog = get_field_catalog()
-    record = get_field_metadata(display_name)
-    sample_columns = catalog['sample_columns']
-
-    if ticker in sample_columns:
-        value = record.get(ticker)
-        serialized = _serialize_value(value)
-        if serialized is not None:
-            return serialized
-
-    ticker_upper = ticker.upper()
-    for column in sample_columns:
-        if column.upper() == ticker_upper:
-            value = record.get(column)
-            serialized = _serialize_value(value)
-            if serialized is not None:
-                return serialized
-
-    return None
 
 
 def record_matches_filters(
@@ -281,48 +279,37 @@ def record_matches_filters(
 
 
 def build_mock_refdata(ticker: str, fields: List[str]) -> Dict[str, Any]:
-    """Create mock reference data using catalog samples when available."""
-    result: Dict[str, Any] = {}
-    for field in fields:
-        sample_value = get_sample_value(field, ticker)
-        if sample_value is None:
-            sample_value = f"mock:{field}"
-        result[field] = sample_value
-    return result
+    """Return 'No Data' placeholders when reference data is unavailable."""
+    return {field: "No Data" for field in fields}
 
 
 def build_mock_historical(ticker: str, fields: List[str]) -> List[Dict[str, Any]]:
-    """Create mock historical data with sample values."""
-    first_snapshot = build_mock_refdata(ticker, fields)
-    second_snapshot = build_mock_refdata(ticker, fields)
-    return [
-        {"date": "2025-09-18", "values": dict(first_snapshot)},
-        {"date": "2025-09-19", "values": dict(second_snapshot)},
-    ]
+    """Return 'No Data' placeholders when historical data is unavailable."""
+    return [{"date": "No Data", "values": {field: "No Data" for field in fields}}]
+
+
 
 
 
 
 def build_mock_instruments(query: str, limit: int) -> List[Dict[str, str]]:
-    """Provide a small mock list of instruments when Bloomberg is unavailable."""
-    samples = [
-        {"security": "BDIY Index", "description": "BDI Baltic Exchange Dry Index", "yellowKey": "Index"},
-        {"security": "BCTI Index", "description": "BCTI Baltic Exchange Clean Tanker Index", "yellowKey": "Index"},
-        {"security": "BPI Index", "description": "BPI Baltic Exchange Panamax Index", "yellowKey": "Index"},
-    ]
-    return samples[: max(0, limit)]
+    """Return no instruments when the Bloomberg service is unavailable."""
+    return []
 
 
-def get_bloomberg_instruments(query: str, limit: int) -> List[Dict[str, str]]:
+def get_bloomberg_instruments(query: str, limit: int) -> Tuple[List[Dict[str, str]], int]:
     """Search Bloomberg instruments using instrumentListRequest."""
     session = get_bloomberg_session()
     if not session:
-        return build_mock_instruments(query, limit)
+        mock_results = build_mock_instruments(query, limit)
+        return mock_results, len(mock_results)
+
     results: List[Dict[str, str]] = []
     try:
         if not session.openService("//blp/instruments"):
             print("DEBUG: Failed to open instruments service")
-            return build_mock_instruments(query, limit)
+            fallback = build_mock_instruments(query, limit)
+            return fallback, len(fallback)
         service = session.getService("//blp/instruments")
         request = service.createRequest("instrumentListRequest")
         request.set("query", query)
@@ -339,7 +326,8 @@ def get_bloomberg_instruments(query: str, limit: int) -> List[Dict[str, str]]:
                     if msg.hasElement("responseError"):
                         err = msg.getElement("responseError")
                         print(f"DEBUG: instrumentListResponse error: {err}")
-                        return build_mock_instruments(query, limit)
+                        fallback = build_mock_instruments(query, limit)
+                        return fallback, len(fallback)
                     if msg.hasElement("instrumentListResponse"):
                         container = msg.getElement("instrumentListResponse")
                     elif msg.hasElement("results"):
@@ -360,6 +348,7 @@ def get_bloomberg_instruments(query: str, limit: int) -> List[Dict[str, str]]:
                 break
     finally:
         session.stop()
+
     deduped: List[Dict[str, str]] = []
     seen = set()
     for rec in results:
@@ -368,8 +357,10 @@ def get_bloomberg_instruments(query: str, limit: int) -> List[Dict[str, str]]:
             continue
         seen.add(key)
         deduped.append(rec)
-    return deduped[: max(0, limit)]
 
+    total_count = len(deduped)
+    limited_results = deduped[: max(0, limit)]
+    return limited_results, total_count
 
 def get_default_coverage_field() -> str:
     """Pick a reasonable default field for coverage checks."""
@@ -706,24 +697,29 @@ async def list_fields(
 async def list_securities(
     request: Request,
     query: str = Query(..., description="Instrument search pattern (e.g., 'BALTIC* INDEX*')"),
-    limit: int = Query(15, ge=1, le=500, description="Maximum securities to return"),
+    limit: int = Query(15, ge=1, le=500, description="Maximum number of securities to include in the response"),
     api_key: str = Depends(get_api_key),
 ):
     """Search for Bloomberg securities (SECF-style)."""
 
-    results = get_bloomberg_instruments(query, limit)
+    results, total_count = get_bloomberg_instruments(query, limit)
     timestamp = datetime.datetime.utcnow()
     provenance = (
         "Bloomberg (brokered via Desktop API) - "
         f"securities query: {query} - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
     )
 
-    return {
+    response = {
         "query": query,
-        "total": len(results),
+        "total": total_count,
+        "returned": len(results),
         "results": results,
         "provenance": provenance,
     }
+    if total_count == 0:
+        response["message"] = "No Data"
+    return response
+
 @app.get("/blp/coverage")
 @limiter.limit("60/minute")
 async def check_coverage(request: Request, ticker: str, api_key: str = Depends(get_api_key)):
@@ -762,19 +758,10 @@ async def check_coverage(request: Request, ticker: str, api_key: str = Depends(g
                 print(f"DEBUG: Coverage check error for {ticker}: {exc}")
         else:
             covered = False
-            message = "Bloomberg connection failed"
+            message = "No Data"
     else:
-        sample_value = get_sample_value(coverage_field, ticker)
-        covered = sample_value is not None or ticker.endswith("US Equity")
-        if covered and sample_value is not None:
-            message = (
-                "Mock data mode — returning catalog sample "
-                f"{coverage_field}: {sample_value}"
-            )
-        elif covered:
-            message = "Mock data mode — coverage heuristics passed"
-        else:
-            message = "Mock data mode — coverage heuristics failed"
+        covered = False
+        message = "No Data"
 
     timestamp = datetime.datetime.utcnow()
     provenance = create_provenance([coverage_field], timestamp)
@@ -811,7 +798,13 @@ async def get_refdata(
     else:
         data = build_mock_refdata(ticker, resolved_fields)
 
-    filtered_data = {field: data.get(field) for field in resolved_fields}
+    filtered_data: Dict[str, Any] = {}
+    for field in resolved_fields:
+        value = (data or {}).get(field) if isinstance(data, dict) else None
+        if value is None or (isinstance(value, str) and not value.strip()):
+            filtered_data[field] = "No Data"
+        else:
+            filtered_data[field] = value
 
     timestamp = datetime.datetime.utcnow()
     provenance = create_provenance(resolved_fields, timestamp)
@@ -861,13 +854,27 @@ async def get_historical(
     else:
         historical_data = build_mock_historical(ticker, resolved_fields)
 
-    filtered_data = [
-        {
-            "date": item["date"],
-            "values": {field: item.get("values", {}).get(field) for field in resolved_fields}
-        }
-        for item in historical_data
-    ]
+    filtered_data = []
+    source_data = historical_data or []
+    for item in source_data:
+        date_value = item.get("date") if isinstance(item, dict) else None
+        values_block = item.get("values") if isinstance(item, dict) else None
+        normalized_values: Dict[str, Any] = {}
+        for field in resolved_fields:
+            raw_value = (values_block or {}).get(field) if isinstance(values_block, dict) else None
+            if raw_value is None or (isinstance(raw_value, str) and not raw_value.strip()):
+                normalized_values[field] = "No Data"
+            else:
+                normalized_values[field] = raw_value
+        filtered_data.append({
+            "date": date_value if isinstance(date_value, str) and date_value.strip() else "No Data",
+            "values": normalized_values,
+        })
+    if not filtered_data:
+        filtered_data.append({
+            "date": "No Data",
+            "values": {field: "No Data" for field in resolved_fields},
+        })
 
     timestamp = datetime.datetime.utcnow()
     provenance = create_provenance(resolved_fields, timestamp)
