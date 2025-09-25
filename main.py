@@ -301,6 +301,76 @@ def build_mock_historical(ticker: str, fields: List[str]) -> List[Dict[str, Any]
     ]
 
 
+
+
+def build_mock_instruments(query: str, limit: int) -> List[Dict[str, str]]:
+    """Provide a small mock list of instruments when Bloomberg is unavailable."""
+    samples = [
+        {"security": "BDIY Index", "description": "BDI Baltic Exchange Dry Index", "yellowKey": "Index"},
+        {"security": "BCTI Index", "description": "BCTI Baltic Exchange Clean Tanker Index", "yellowKey": "Index"},
+        {"security": "BPI Index", "description": "BPI Baltic Exchange Panamax Index", "yellowKey": "Index"},
+    ]
+    return samples[: max(0, limit)]
+
+
+def get_bloomberg_instruments(query: str, limit: int) -> List[Dict[str, str]]:
+    """Search Bloomberg instruments using instrumentListRequest."""
+    session = get_bloomberg_session()
+    if not session:
+        return build_mock_instruments(query, limit)
+    results: List[Dict[str, str]] = []
+    try:
+        if not session.openService("//blp/instruments"):
+            print("DEBUG: Failed to open instruments service")
+            return build_mock_instruments(query, limit)
+        service = session.getService("//blp/instruments")
+        request = service.createRequest("instrumentListRequest")
+        request.set("query", query)
+        try:
+            request.set("maxResults", int(limit))
+        except Exception:
+            pass
+        session.sendRequest(request)
+        while True:
+            event = session.nextEvent(5000)
+            et = event.eventType()
+            if et in (blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE):
+                for msg in event:
+                    if msg.hasElement("responseError"):
+                        err = msg.getElement("responseError")
+                        print(f"DEBUG: instrumentListResponse error: {err}")
+                        return build_mock_instruments(query, limit)
+                    if msg.hasElement("instrumentListResponse"):
+                        container = msg.getElement("instrumentListResponse")
+                    elif msg.hasElement("results"):
+                        container = msg.getElement("results")
+                    else:
+                        continue
+                    for i in range(container.numValues()):
+                        row = container.getValueAsElement(i)
+                        security = row.getElementAsString("security") if row.hasElement("security") else ""
+                        description = row.getElementAsString("description") if row.hasElement("description") else ""
+                        yellow = row.getElementAsString("yellowKey") if row.hasElement("yellowKey") else ""
+                        if security or description:
+                            results.append({"security": security, "description": description, "yellowKey": yellow})
+                if et == blpapi.Event.RESPONSE:
+                    break
+            elif et == blpapi.Event.TIMEOUT:
+                print("DEBUG: instrumentListRequest timeout")
+                break
+    finally:
+        session.stop()
+    deduped: List[Dict[str, str]] = []
+    seen = set()
+    for rec in results:
+        key = (rec.get("security"), rec.get("description"), rec.get("yellowKey"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(rec)
+    return deduped[: max(0, limit)]
+
+
 def get_default_coverage_field() -> str:
     """Pick a reasonable default field for coverage checks."""
     try:
@@ -550,8 +620,11 @@ def create_provenance(fields: List[str], timestamp: datetime.datetime) -> str:
         fields_clause = ', '.join(descriptors) if descriptors else 'n/a'
     except HTTPException:
         fields_clause = ', '.join(fields) if fields else 'n/a'
-    return ("Bloomberg (brokered via Desktop API) — "
-            f"fields: {fields_clause} — retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    return ("Bloomberg (brokered via Desktop API) - "
+            f"fields: {fields_clause} - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+
+
 
 
 @app.get("/blp/fields")
@@ -626,6 +699,31 @@ async def list_fields(
         "provenance": provenance,
     }
 
+
+
+@app.get("/blp/securities")
+@limiter.limit("60/minute")
+async def list_securities(
+    request: Request,
+    query: str = Query(..., description="Instrument search pattern (e.g., 'BALTIC* INDEX*')"),
+    limit: int = Query(15, ge=1, le=500, description="Maximum securities to return"),
+    api_key: str = Depends(get_api_key),
+):
+    """Search for Bloomberg securities (SECF-style)."""
+
+    results = get_bloomberg_instruments(query, limit)
+    timestamp = datetime.datetime.utcnow()
+    provenance = (
+        "Bloomberg (brokered via Desktop API) - "
+        f"securities query: {query} - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    )
+
+    return {
+        "query": query,
+        "total": len(results),
+        "results": results,
+        "provenance": provenance,
+    }
 @app.get("/blp/coverage")
 @limiter.limit("60/minute")
 async def check_coverage(request: Request, ticker: str, api_key: str = Depends(get_api_key)):

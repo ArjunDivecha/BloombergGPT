@@ -35,6 +35,17 @@ components:
           additionalProperties: true
           description: >
             Sample values pulled from the curated catalog keyed by representative tickers
+    SecurityInfo:
+      type: object
+      properties:
+        security:
+          type: string
+          description: Bloomberg security identifier (e.g., BDIY Index)
+        description:
+          type: string
+        yellowKey:
+          type: string
+          description: Bloomberg yellow key (classification)
     CoverageResponse:
       type: object
       properties:
@@ -179,6 +190,46 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/FieldInfo'
+                  provenance:
+                    type: string
+  /blp/securities:
+    get:
+      operationId: getSecurities
+      summary: Search Bloomberg instruments (SECF-style)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Instrument search pattern (supports wildcards)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 15
+          description: Maximum number of securities returned
+      responses:
+        '200':
+          description: Matching Bloomberg securities
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                  total:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SecurityInfo'
                   provenance:
                     type: string
   /blp/coverage:
