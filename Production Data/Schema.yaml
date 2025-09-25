@@ -1,0 +1,277 @@
+openapi: 3.1.0
+info:
+  title: Bloomberg Data Broker - UNRESTRICTED
+  version: 2.1.0
+  description: >
+    Bloomberg Data Broker - UNRESTRICTED.
+    Any field allowed; field list driven by the curated master catalog.
+servers:
+  - url: https://4ef9477d7749.ngrok-free.app
+    description: Bloomberg Data Broker via ngrok tunnel - UNRESTRICTED
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    FieldInfo:
+      type: object
+      properties:
+        field:
+          type: string
+          description: Bloomberg display mnemonic (e.g., PX_LAST)
+        field_id:
+          type: string
+          description: Bloomberg field ID (e.g., PR005)
+        description:
+          type: string
+        data_type:
+          type: string
+        sampleValues:
+          type: object
+          additionalProperties: true
+          description: >
+            Sample values pulled from the curated catalog keyed by representative tickers
+    CoverageResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        covered:
+          type: boolean
+        message:
+          type: string
+        coverage_field:
+          type: string
+          description: Field used to verify coverage (display mnemonic)
+        provenance:
+          type: string
+    ResolvedField:
+      type: object
+      properties:
+        requested:
+          type: string
+          description: The field text supplied by the caller
+        display_name:
+          type: string
+          description: Bloomberg display mnemonic
+        field_id:
+          type: string
+        description:
+          type: string
+        data_type:
+          type: string
+    RefDataResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        fields:
+          type: array
+          items:
+            type: string
+          description: List of resolved Bloomberg field mnemonics (display names)
+        resolved_fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResolvedField'
+        data:
+          type: object
+          additionalProperties: true
+          description: Field/value map keyed by display mnemonic
+        provenance:
+          type: string
+    HistoricalDataPoint:
+      type: object
+      properties:
+        date:
+          type: string
+          format: date
+        values:
+          type: object
+          additionalProperties: true
+          description: Field/value map for this date keyed by display mnemonic
+    HistoricalResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        fields:
+          type: array
+          items:
+            type: string
+          description: Resolved Bloomberg field mnemonics
+        resolved_fields:
+          type: array
+          items:
+            $ref: '#/components/schemas/ResolvedField'
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/HistoricalDataPoint'
+        provenance:
+          type: string
+paths:
+  /blp/fields:
+    get:
+      operationId: getFields
+      summary: List Bloomberg fields from the curated master catalog
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: contains
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Case-insensitive substring applied to mnemonic/description/category
+        - name: regex
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Regular expression applied to mnemonic/description (case-insensitive)
+        - name: terms
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+          description: Tokens that must appear in results (see matchMode)
+        - name: matchMode
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [any, all]
+            default: any
+          description: Require any or all supplied terms
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 100
+          description: Maximum number of FieldInfo objects returned
+      responses:
+        '200':
+          description: Catalog of allowed Bloomberg fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    description: Total number of fields matching the filter
+                  returned:
+                    type: integer
+                    description: Number of FieldInfo objects included in this response
+                  fields:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/FieldInfo'
+                  provenance:
+                    type: string
+  /blp/coverage:
+    get:
+      operationId: getCoverage
+      summary: Check Bloomberg coverage for a ticker
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Bloomberg ticker symbol (e.g., AAPL US Equity)
+      responses:
+        '200':
+          description: Coverage status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CoverageResponse'
+  /blp/refdata:
+    get:
+      operationId: getRefData
+      summary: Retrieve current reference data for a ticker (unrestricted fields)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Bloomberg ticker symbol
+        - name: fields
+          in: query
+          required: true
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+          description: >
+            Field names or phrases; each will be resolved to the curated Bloomberg
+            display mnemonic (case-insensitive, friendly names supported)
+      responses:
+        '200':
+          description: Reference data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefDataResponse'
+  /blp/historical:
+    get:
+      operationId: getHistorical
+      summary: Retrieve historical data for a ticker (unrestricted fields)
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: fields
+          in: query
+          required: true
+          style: form
+          explode: true
+          schema:
+            type: array
+            items:
+              type: string
+          description: >
+            Field names or phrases; resolved to Bloomberg display mnemonics using the curated catalog
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Historical data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HistoricalResponse'

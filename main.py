@@ -246,6 +246,40 @@ def get_sample_value(display_name: str, ticker: str) -> Any:
     return None
 
 
+def record_matches_filters(
+    record: Dict[str, Any],
+    contains: Optional[str] = None,
+    pattern: Optional[re.Pattern] = None,
+    terms: Optional[List[str]] = None,
+    match_mode: str = 'any',
+) -> bool:
+    """Check if a catalog record satisfies optional filter criteria."""
+
+    text_parts = [
+        str(record.get('Display Name', '')),
+        str(record.get('Description', '')),
+        str(record.get('Category', '')),
+        str(record.get('Subcategory', '')),
+        str(record.get('Field ID', '')),
+    ]
+    haystack = ' '.join(part for part in text_parts if part).lower()
+
+    if contains and contains not in haystack:
+        return False
+
+    if pattern and not pattern.search(haystack):
+        return False
+
+    if terms:
+        matches = [term in haystack for term in terms]
+        if match_mode == 'all' and not all(matches):
+            return False
+        if match_mode == 'any' and not any(matches):
+            return False
+
+    return True
+
+
 def build_mock_refdata(ticker: str, fields: List[str]) -> Dict[str, Any]:
     """Create mock reference data using catalog samples when available."""
     result: Dict[str, Any] = {}
@@ -522,13 +556,49 @@ def create_provenance(fields: List[str], timestamp: datetime.datetime) -> str:
 
 @app.get("/blp/fields")
 @limiter.limit("60/minute")
-async def list_fields(request: Request, api_key: str = Depends(get_api_key)):
-    """List allowed Bloomberg fields"""
+async def list_fields(
+    request: Request,
+    api_key: str = Depends(get_api_key),
+    contains: Optional[str] = Query(None, description="Case-insensitive substring to match"),
+    regex: Optional[str] = Query(None, description="Regular expression applied to mnemonic/description"),
+    terms: Optional[List[str]] = Query(None, description="Tokens that must match (see match mode)"),
+    match_mode: str = Query("any", regex="^(?i:any|all)$", description="Require any or all tokens to match"),
+    limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
+):
+    """List allowed Bloomberg fields with optional filtering."""
+
     catalog = get_field_catalog()
     sample_columns = catalog['sample_columns']
 
-    fields_info = []
+    normalized_contains = contains.lower() if contains else None
+
+    pattern = None
+    if regex:
+        try:
+            pattern = re.compile(regex, re.IGNORECASE)
+        except re.error as exc:
+            raise HTTPException(status_code=400, detail=f"Invalid regex: {exc}") from exc
+
+    match_mode_normalized = match_mode.lower()
+    if match_mode_normalized not in {"any", "all"}:
+        raise HTTPException(status_code=400, detail="match_mode must be 'any' or 'all'")
+
+    term_list = [t.lower() for t in terms] if terms else []
+
+    filtered_records = []
     for record in catalog['records']:
+        if not record_matches_filters(
+            record,
+            contains=normalized_contains,
+            pattern=pattern,
+            terms=term_list,
+            match_mode=match_mode_normalized,
+        ):
+            continue
+        filtered_records.append(record)
+
+    fields_info = []
+    for record in filtered_records[:limit]:
         entry = {
             "field": record.get('Display Name'),
             "field_id": record.get('Field ID'),
@@ -550,9 +620,10 @@ async def list_fields(request: Request, api_key: str = Depends(get_api_key)):
     provenance = create_provenance([], timestamp)
 
     return {
-        "total": len(fields_info),
+        "total": len(filtered_records),
+        "returned": len(fields_info),
         "fields": fields_info,
-        "provenance": provenance
+        "provenance": provenance,
     }
 
 @app.get("/blp/coverage")
