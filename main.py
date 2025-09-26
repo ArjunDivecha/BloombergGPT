@@ -86,6 +86,14 @@ BLOOMBERG_PORT = int(os.getenv("BLOOMBERG_PORT", "8194"))
 RATE_LIMIT = os.getenv("RATE_LIMIT", "60/minute")
 api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
+DEBUG_LOGGING = os.getenv("BROKER_DEBUG", "0").lower() in {"1", "true", "yes", "on"}
+
+
+def debug(message: str) -> None:
+    """Emit debug output when BROKER_DEBUG is enabled."""
+    if DEBUG_LOGGING:
+        print(f"[DEBUG] {message}")
+
 async def get_api_key(api_key: str = Depends(api_key_header)):
     if api_key != API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
@@ -307,7 +315,7 @@ def get_bloomberg_instruments(query: str, limit: int) -> Tuple[List[Dict[str, st
     results: List[Dict[str, str]] = []
     try:
         if not session.openService("//blp/instruments"):
-            print("DEBUG: Failed to open instruments service")
+            debug("Failed to open instruments service")
             fallback = build_mock_instruments(query, limit)
             return fallback, len(fallback)
         service = session.getService("//blp/instruments")
@@ -325,7 +333,7 @@ def get_bloomberg_instruments(query: str, limit: int) -> Tuple[List[Dict[str, st
                 for msg in event:
                     if msg.hasElement("responseError"):
                         err = msg.getElement("responseError")
-                        print(f"DEBUG: instrumentListResponse error: {err}")
+                        debug(f"instrumentListResponse error: {err}")
                         fallback = build_mock_instruments(query, limit)
                         return fallback, len(fallback)
                     if msg.hasElement("instrumentListResponse"):
@@ -344,7 +352,7 @@ def get_bloomberg_instruments(query: str, limit: int) -> Tuple[List[Dict[str, st
                 if et == blpapi.Event.RESPONSE:
                     break
             elif et == blpapi.Event.TIMEOUT:
-                print("DEBUG: instrumentListRequest timeout")
+                debug("instrumentListRequest timeout")
                 break
     finally:
         session.stop()
@@ -397,17 +405,17 @@ def get_bloomberg_session():
 def get_bloomberg_data(session, ticker, fields):
     """Get real data from Bloomberg"""
     if not session:
-        print("DEBUG: No session provided")
+        debug("No session provided")
         return None
         
     try:
-        print(f"DEBUG: Opening reference data service...")
+        debug(f"Opening reference data service...")
         # Open reference data service
         if not session.openService("//blp/refdata"):
-            print("DEBUG: Failed to open reference data service")
+            debug("Failed to open reference data service")
             return None
             
-        print("DEBUG: Reference data service opened successfully")
+        debug("Reference data service opened successfully")
         refDataService = session.getService("//blp/refdata")
         request = refDataService.createRequest("ReferenceDataRequest")
         
@@ -416,28 +424,28 @@ def get_bloomberg_data(session, ticker, fields):
         if not any(suffix in ticker.upper() for suffix in [" EQUITY", " CORP", " GOVT", " INDEX", " CURNCY", " COMDTY"]):
             bloomberg_ticker = f"{ticker} US Equity"
             
-        print(f"DEBUG: Creating request for ticker={ticker} -> Bloomberg ticker={bloomberg_ticker}, fields={fields}")
+        debug(f"Creating request for ticker={ticker} -> Bloomberg ticker={bloomberg_ticker}, fields={fields}")
         # Add ticker and fields
         request.getElement("securities").appendValue(bloomberg_ticker)
         for field in fields:
             request.getElement("fields").appendValue(field)
             
-        print("DEBUG: Sending request to Bloomberg...")
+        debug("Sending request to Bloomberg...")
         # Send request
         session.sendRequest(request)
         
-        print("DEBUG: Processing response...")
+        debug("Processing response...")
         # Process response
         while True:
             event = session.nextEvent(500)  # 500ms timeout
-            print(f"DEBUG: Received event type: {event.eventType()}")
+            debug(f"Received event type: {event.eventType()}")
             
             if event.eventType() == blpapi.Event.RESPONSE or event.eventType() == blpapi.Event.PARTIAL_RESPONSE:
                 for msg in event:
-                    print(f"DEBUG: Processing message: {msg}")
+                    debug(f"Processing message: {msg}")
                     if msg.hasElement("securityData"):
                         securityData = msg.getElement("securityData")
-                        print(f"DEBUG: Found securityData with {securityData.numValues()} values")
+                        debug(f"Found securityData with {securityData.numValues()} values")
                         if securityData.numValues() > 0:
                             security = securityData.getValue(0)
                             
@@ -446,7 +454,7 @@ def get_bloomberg_data(session, ticker, fields):
                                 securityError = security.getElement("securityError")
                                 error_msg = securityError.getElementAsString("message")
                                 error_code = securityError.getElementAsString("code")
-                                print(f"DEBUG: Bloomberg security error: {error_msg} (code: {error_code})")
+                                debug(f"Bloomberg security error: {error_msg} (code: {error_code})")
                                 raise HTTPException(status_code=400, detail=f"Invalid ticker '{ticker}': {error_msg}")
                             
                             if security.hasElement("fieldData"):
@@ -456,28 +464,28 @@ def get_bloomberg_data(session, ticker, fields):
                                     if fieldData.hasElement(field):
                                         value = fieldData.getElementAsString(field)
                                         result[field] = value
-                                        print(f"DEBUG: Got field {field} = {value}")
+                                        debug(f"Got field {field} = {value}")
                                     else:
-                                        print(f"DEBUG: Field {field} not found in response")
+                                        debug(f"Field {field} not found in response")
                                 if result:
-                                    print(f"DEBUG: Returning data: {result}")
+                                    debug(f"Returning data: {result}")
                                     return result
                             else:
-                                print("DEBUG: No fieldData in security")
+                                debug("No fieldData in security")
                         else:
-                            print("DEBUG: No securities in securityData")
+                            debug("No securities in securityData")
                     else:
-                        print("DEBUG: No securityData in message")
+                        debug("No securityData in message")
                                 
             if event.eventType() == blpapi.Event.RESPONSE:
-                print("DEBUG: Received final response")
+                debug("Received final response")
                 break
                 
-        print("DEBUG: No data found in response")
+        debug("No data found in response")
         return None
         
     except Exception as e:
-        print(f"DEBUG: Bloomberg API error: {e}")
+        debug(f"Bloomberg API error: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -485,17 +493,17 @@ def get_bloomberg_data(session, ticker, fields):
 def get_bloomberg_historical_data(session, ticker, fields, start_date, end_date):
     """Get historical data from Bloomberg"""
     if not session:
-        print("DEBUG: No session provided for historical data")
+        debug("No session provided for historical data")
         return None
         
     try:
-        print(f"DEBUG: Opening historical data service...")
+        debug(f"Opening historical data service...")
         # Open historical data service
         if not session.openService("//blp/refdata"):
-            print("DEBUG: Failed to open reference data service for historical")
+            debug("Failed to open reference data service for historical")
             return None
             
-        print("DEBUG: Historical data service opened successfully")
+        debug("Historical data service opened successfully")
         refDataService = session.getService("//blp/refdata")
         request = refDataService.createRequest("HistoricalDataRequest")
         
@@ -504,8 +512,8 @@ def get_bloomberg_historical_data(session, ticker, fields, start_date, end_date)
         if not any(suffix in ticker.upper() for suffix in [" EQUITY", " CORP", " GOVT", " INDEX", " CURNCY", " COMDTY"]):
             bloomberg_ticker = f"{ticker} US Equity"
             
-        print(f"DEBUG: Creating historical request for ticker={ticker} -> Bloomberg ticker={bloomberg_ticker}")
-        print(f"DEBUG: Date range: {start_date} to {end_date}, fields={fields}")
+        debug(f"Creating historical request for ticker={ticker} -> Bloomberg ticker={bloomberg_ticker}")
+        debug(f"Date range: {start_date} to {end_date}, fields={fields}")
         
         # Add ticker and fields
         request.getElement("securities").appendValue(bloomberg_ticker)
@@ -516,42 +524,42 @@ def get_bloomberg_historical_data(session, ticker, fields, start_date, end_date)
         request.set("startDate", start_date.replace("-", ""))  # Bloomberg expects YYYYMMDD format
         request.set("endDate", end_date.replace("-", ""))
         
-        print("DEBUG: Sending historical request to Bloomberg...")
+        debug("Sending historical request to Bloomberg...")
         # Send request
         requestID = session.sendRequest(request)
-        print(f"DEBUG: Historical request sent with ID: {requestID}")
+        debug(f"Historical request sent with ID: {requestID}")
         
-        print("DEBUG: Processing historical response...")
+        debug("Processing historical response...")
         historical_data = []
         
         # Process response
         while True:
             event = session.nextEvent(5000)  # 5 second timeout for historical data
-            print(f"DEBUG: Received historical event type: {event.eventType()}")
+            debug(f"Received historical event type: {event.eventType()}")
             
             if event.eventType() == blpapi.Event.TIMEOUT:
-                print("DEBUG: Timeout waiting for historical response")
+                debug("Timeout waiting for historical response")
                 break
             
             if event.eventType() == blpapi.Event.RESPONSE or event.eventType() == blpapi.Event.PARTIAL_RESPONSE:
                 for msg in event:
-                    print(f"DEBUG: Processing historical message: {msg}")
+                    debug(f"Processing historical message: {msg}")
                     if msg.hasElement("securityData"):
                         # For historical data, securityData is a single element, not an array
                         security = msg.getElement("securityData")
-                        print(f"DEBUG: Found historical securityData")
+                        debug(f"Found historical securityData")
                         
                         # Check for security errors
                         if security.hasElement("securityError"):
                             securityError = security.getElement("securityError")
                             error_msg = securityError.getElementAsString("message")
                             error_code = securityError.getElementAsString("code")
-                            print(f"DEBUG: Bloomberg historical security error: {error_msg} (code: {error_code})")
+                            debug(f"Bloomberg historical security error: {error_msg} (code: {error_code})")
                             raise HTTPException(status_code=400, detail=f"Invalid ticker '{ticker}': {error_msg}")
                         
                         if security.hasElement("fieldData"):
                             fieldDataArray = security.getElement("fieldData")
-                            print(f"DEBUG: Found {fieldDataArray.numValues()} historical data points")
+                            debug(f"Found {fieldDataArray.numValues()} historical data points")
                             
                             for j in range(fieldDataArray.numValues()):
                                 fieldData = fieldDataArray.getValueAsElement(j)
@@ -565,12 +573,12 @@ def get_bloomberg_historical_data(session, ticker, fields, start_date, end_date)
                                         try:
                                             value = fieldData.getElementAsFloat(field)
                                             values[field] = value
-                                            print(f"DEBUG: Got historical {field} = {value} for {formatted_date}")
+                                            debug(f"Got historical {field} = {value} for {formatted_date}")
                                         except:
                                             # Try as string if float fails
                                             value = fieldData.getElementAsString(field)
                                             values[field] = value
-                                            print(f"DEBUG: Got historical {field} = {value} for {formatted_date}")
+                                            debug(f"Got historical {field} = {value} for {formatted_date}")
                                 
                                 if values:
                                     historical_data.append({
@@ -578,21 +586,21 @@ def get_bloomberg_historical_data(session, ticker, fields, start_date, end_date)
                                         "values": values
                                     })
                                         
-                print(f"DEBUG: Collected {len(historical_data)} historical data points")
+                debug(f"Collected {len(historical_data)} historical data points")
                                 
             if event.eventType() == blpapi.Event.RESPONSE:
-                print("DEBUG: Received final historical response")
+                debug("Received final historical response")
                 break
                 
         if historical_data:
-            print(f"DEBUG: Returning {len(historical_data)} historical records")
+            debug(f"Returning {len(historical_data)} historical records")
             return historical_data
         else:
-            print("DEBUG: No historical data found in response")
+            debug("No historical data found in response")
             return None
         
     except Exception as e:
-        print(f"DEBUG: Bloomberg historical API error: {e}")
+        debug(f"Bloomberg historical API error: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -730,7 +738,7 @@ async def check_coverage(request: Request, ticker: str, api_key: str = Depends(g
     coverage_field = get_default_coverage_field()
 
     if BLOOMBERG_AVAILABLE:
-        print(f"DEBUG: Checking Bloomberg coverage for {ticker} using field {coverage_field}")
+        debug(f"Checking Bloomberg coverage for {ticker} using field {coverage_field}")
         session = get_bloomberg_session()
         if session:
             try:
@@ -743,19 +751,19 @@ async def check_coverage(request: Request, ticker: str, api_key: str = Depends(g
                         "Data available via Bloomberg Desktop API "
                         f"({coverage_field}: {field_value})"
                     )
-                    print(f"DEBUG: Coverage confirmed for {ticker}: {field_value}")
+                    debug(f"Coverage confirmed for {ticker}: {field_value}")
                 else:
                     covered = False
                     message = "Security not found in Bloomberg database"
-                    print(f"DEBUG: No coverage for {ticker}")
+                    debug(f"No coverage for {ticker}")
             except HTTPException as exc:
                 covered = False
                 message = exc.detail
-                print(f"DEBUG: Coverage check failed for {ticker}: {exc.detail}")
+                debug(f"Coverage check failed for {ticker}: {exc.detail}")
             except Exception as exc:
                 covered = False
                 message = "Error checking Bloomberg coverage"
-                print(f"DEBUG: Coverage check error for {ticker}: {exc}")
+                debug(f"Coverage check error for {ticker}: {exc}")
         else:
             covered = False
             message = "No Data"
@@ -839,17 +847,17 @@ async def get_historical(
         end_date = datetime.date.today().isoformat()
 
     if BLOOMBERG_AVAILABLE:
-        print(f"DEBUG: Attempting to get Bloomberg historical data for {ticker} with fields {resolved_fields}")
-        print(f"DEBUG: Date range: {start_date} to {end_date}")
+        debug(f"Attempting to get Bloomberg historical data for {ticker} with fields {resolved_fields}")
+        debug(f"Date range: {start_date} to {end_date}")
         session = get_bloomberg_session()
         if session:
-            print("DEBUG: Bloomberg historical session created successfully")
+            debug("Bloomberg historical session created successfully")
             historical_data = get_bloomberg_historical_data(session, ticker, resolved_fields, start_date, end_date)
             session.stop()
         else:
             historical_data = None
         if not historical_data:
-            print("DEBUG: Historical request failed or returned no data, using mock values")
+            debug("Historical request failed or returned no data, using mock values")
             historical_data = build_mock_historical(ticker, resolved_fields)
     else:
         historical_data = build_mock_historical(ticker, resolved_fields)
