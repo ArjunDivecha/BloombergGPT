@@ -1,0 +1,204 @@
+openapi: 3.1.0
+info:
+  title: Bloomberg Data Broker
+  version: 1.0.0
+  description: Bloomberg Data Broker for ChatGPT integration
+servers:
+  - url: https://2a4a2ad89f51.ngrok-free.app
+Press any key to continue . . .
+PS Microsoft.PowerShell.Core\FileSystem::\\Mac\Dropbox-1\AAA Backup\A Working\BloombergGPT> python main.py
+Starting Bloomberg Data Broker on 0.0.0.0:8000
+API Key: Caeser00**
+Bloomberg Terminal: localhost:8194
+RAG System: Available
+INFO:     Started server process [15872]
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+\\Mac\Dropbox-1\AAA Backup\A Working\BloombergGPT\main.py:406: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  timestamp = datetime.datetime.utcnow()
+INFO:     127.0.0.1:57440 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57448 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57456 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57465 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57477 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     74.7.36.66:0 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:57487 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57495 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57504 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57512 - "GET /blp/fields HTTP/1.1" 200 OK
+INFO:     74.7.36.75:0 - "GET / HTTP/1.1" 404 Not Found
+    description: Bloomberg Data Broker via ngrok tunnel
+security:
+  - ApiKeyAuth: []
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    FieldInfo:
+      type: object
+      properties:
+        field:
+          type: string
+        description:
+          type: string
+    CoverageResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        covered:
+          type: boolean
+        message:
+          type: string
+        provenance:
+          type: string
+    RefDataResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        fields:
+          type: object
+        provenance:
+          type: string
+    HistoricalResponse:
+      type: object
+      properties:
+        ticker:
+          type: string
+        fields:
+          type: array
+          items:
+            type: string
+        data:
+          type: array
+          items:
+            type: object
+        provenance:
+          type: string
+paths:
+  /blp/fields:
+    get:
+      operationId: getFields
+      summary: List allowed Bloomberg fields
+      security:
+        - ApiKeyAuth: []
+      responses:
+        "200":
+          description: List of allowed fields
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/FieldInfo"
+  /blp/coverage:
+    get:
+      operationId: getCoverage
+      summary: Check Bloomberg coverage for a ticker
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          description: The Bloomberg ticker symbol
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Coverage status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CoverageResponse"
+  /blp/refdata:
+    get:
+      operationId: getRefData
+      summary: Retrieve current reference data for a ticker
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          description: The Bloomberg ticker symbol
+          required: true
+          schema:
+            type: string
+        - name: fields
+          in: query
+          description: Bloomberg fields to retrieve
+          required: true
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - PX_LAST
+                - PX_OPEN
+                - PX_HIGH
+                - PX_LOW
+                - VOLUME
+                - NAME
+                - MARKET_CAP
+      responses:
+        "200":
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RefDataResponse"
+  /blp/historical:
+    get:
+      operationId: getHistorical
+      summary: Retrieve historical data for a ticker
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: fields
+          in: query
+          required: true
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - PX_LAST
+                - PX_OPEN
+                - PX_HIGH
+                - PX_LOW
+                - VOLUME
+                - NAME
+                - MARKET_CAP
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Historical data retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoricalResponse"

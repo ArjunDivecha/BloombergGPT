@@ -192,6 +192,74 @@ paths:
                       $ref: '#/components/schemas/FieldInfo'
                   provenance:
                     type: string
+  /blp/screen:
+    get:
+      operationId: runEquityScreen
+      summary: Run Bloomberg Equity Screen (BEQS) - Run saved EQS screens
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: screen_name
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Name of saved Bloomberg EQS screen
+        - name: screen_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [PRIVATE, GLOBAL]
+            default: PRIVATE
+          description: PRIVATE (your saved screens) or GLOBAL (Bloomberg sample screens)
+        - name: group
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Folder/category for GLOBAL screens. Examples: "Popular", "Investment Banking"
+            Required for most GLOBAL screens
+        - name: language
+          in: query
+          required: false
+          schema:
+            type: string
+            default: ENGLISH
+          description: Language ID for screen results
+        - name: asof_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: Optional date (YYYY-MM-DD) for historical Point-in-Time screening
+      responses:
+        '200':
+          description: Screen results retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  screen_name:
+                    type: string
+                  screen_type:
+                    type: string
+                  group:
+                    type: string
+                  asof_date:
+                    type: string
+                  count:
+                    type: integer
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+                  provenance:
+                    type: string
   /blp/securities:
     get:
       operationId: getSecurities
@@ -262,16 +330,26 @@ paths:
   /blp/refdata:
     get:
       operationId: getRefData
-      summary: Retrieve current reference data for a ticker (unrestricted fields)
+      summary: Retrieve current reference data for one or more tickers (SUPPORTS BATCH REQUESTS)
       security:
         - ApiKeyAuth: []
       parameters:
         - name: ticker
           in: query
           required: true
+          style: form
+          explode: true
           schema:
-            type: string
-          description: Bloomberg ticker symbol
+            type: array
+            items:
+              type: string
+            minItems: 1
+            maxItems: 100
+          description: >
+            One or more Bloomberg ticker symbols. BATCH SUPPORT: Pass multiple tickers to get
+            data in ONE API call instead of making separate requests. 
+            Example: ?ticker=AAPL&ticker=MSFT&ticker=GOOGL
+            This is 10x more efficient than individual requests!
         - name: fields
           in: query
           required: true
@@ -326,6 +404,23 @@ paths:
           schema:
             type: string
             format: date
+        - name: periodicity
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [DAILY, WEEKLY, MONTHLY, QUARTERLY, YEARLY]
+            default: DAILY
+          description: Data frequency - auto-upgrades to MONTHLY for ranges > 2 years, QUARTERLY for > 10 years
+        - name: max_data_points
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1000
+          description: Maximum data points to return (prevents ChatGPT response size limits)
       responses:
         '200':
           description: Historical data retrieved successfully
@@ -333,3 +428,67 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HistoricalResponse'
+  /blp/bulkdata:
+    get:
+      operationId: getBulkData
+      summary: Retrieve Bloomberg bulk/tabular data (BDS) - returns array/table results
+      description: >
+        Get Bloomberg bulk data fields that return tables/arrays instead of single values.
+        Common use cases: dividend history, revenue by segment, major shareholders, earnings history, etc.
+        This unlocks hundreds of Bloomberg fields that provide rich multi-row datasets.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Bloomberg ticker symbol (e.g., AAPL US Equity or just AAPL)
+        - name: field
+          in: query
+          required: true
+          schema:
+            type: string
+          description: >
+            Bulk data field name. Common examples:
+            DVD_HIST_ALL (dividend history), 
+            PG_REVENUE (revenue by segment),
+            TOP_20_HOLDERS_PUBLIC_FILINGS (major shareholders),
+            EARN_ANN_DT_TIME_HIST_WITH_EPS (earnings history),
+            CF_FREE_CASH_FLOW (free cash flow by period)
+      responses:
+        '200':
+          description: Bulk data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticker:
+                    type: string
+                    description: Ticker that was queried
+                  field:
+                    type: string
+                    description: Resolved Bloomberg field name
+                  field_info:
+                    $ref: '#/components/schemas/FieldInfo'
+                  row_count:
+                    type: integer
+                    description: Number of rows returned in the bulk data table
+                  data:
+                    type: array
+                    description: Array of objects, where each object represents one row of the table
+                    items:
+                      type: object
+                      additionalProperties: true
+                      description: Each row contains field-value pairs for that record
+                  provenance:
+                    type: string
+                    description: Data source and retrieval timestamp
+        '400':
+          description: Bad request (e.g., field is not a bulk data field)
+        '404':
+          description: No bulk data returned for the specified field
+        '503':
+          description: Bloomberg API unavailable

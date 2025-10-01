@@ -1,6 +1,6 @@
 # Bloomberg Data Broker on Cloudflare Tunnel
 
-This repository hosts a FastAPI “Bloomberg Data Broker” that brokers requests from ChatGPT (or any HTTP client) to the Bloomberg Desktop API. The project is wired for a permanent Cloudflare Tunnel URL so you no longer have to copy/paste temporary ngrok domains after every reboot.
+This repository hosts a FastAPI ï¿½Bloomberg Data Brokerï¿½ that brokers requests from ChatGPT (or any HTTP client) to the Bloomberg Desktop API. The project is wired for a permanent Cloudflare Tunnel URL so you no longer have to copy/paste temporary ngrok domains after every reboot.
 
 The guide below walks through setting it up from scratch on a new Windows machine.
 
@@ -40,7 +40,7 @@ setup_environment.bat
 
 After it finishes:
 - Edit `.env` if you need to change the default API key or Bloomberg host/port.
-- Confirm the shortcuts “Start Bloomberg Broker” and “Stop Bloomberg Broker” were added to your desktop.
+- Confirm the shortcuts ï¿½Start Bloomberg Brokerï¿½ and ï¿½Stop Bloomberg Brokerï¿½ were added to your desktop.
 
 ---
 
@@ -117,6 +117,7 @@ After it finishes:
 ```
 BloombergGPT/
 +-- main.py                          # FastAPI broker
++-- GPT_System_Prompt_Adventurous.md # Adventurous system prompt for ChatGPT Custom GPT
 +-- start_bloomberg_broker.bat       # Launch broker + Cloudflare tunnel + status
 +-- stop_bloomberg_broker.bat        # Cleanup script
 +-- start_cloudflared.bat            # Standalone tunnel runner
@@ -137,7 +138,7 @@ BloombergGPT/
     - url: https://broker.dancing-ganesh.com
       description: Bloomberg Data Broker via Cloudflare tunnel - UNRESTRICTED
   ```
-- Paste this schema into your GPT’s Action or Tool config, or expose it via OpenAPI as needed.
+- Paste this schema into your GPTï¿½s Action or Tool config, or expose it via OpenAPI as needed.
 
 ---
 
