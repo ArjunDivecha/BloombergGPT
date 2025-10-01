@@ -1,6 +1,18 @@
 # Bloomberg Data Broker on Cloudflare Tunnel
 
-This repository hosts a FastAPI �Bloomberg Data Broker� that brokers requests from ChatGPT (or any HTTP client) to the Bloomberg Desktop API. The project is wired for a permanent Cloudflare Tunnel URL so you no longer have to copy/paste temporary ngrok domains after every reboot.
+This repository hosts a FastAPI "Bloomberg Data Broker" that brokers requests from ChatGPT (or any HTTP client) to the Bloomberg Desktop API. The project is wired for a permanent Cloudflare Tunnel URL so you no longer have to copy/paste temporary ngrok domains after every reboot.
+
+## Features
+
+- **10 Bloomberg API Endpoints**: Reference data, historical data, bulk data, field discovery, securities search, and equity screening
+- **Dynamic Field Discovery**: Search Bloomberg's live 24,000+ field catalog by keyword
+- **Bulk Data Service (BDS)**: Access 530+ bulk/tabular data fields (dividends, earnings, revenue, shareholders, etc.)
+- **Bloomberg Equity Screening (BEQS)**: Run saved screens from Bloomberg Terminal
+- **Security Search**: Find Bloomberg tickers and instruments (SECF-style)
+- **Field Service**: Real-time field search, detailed metadata, and complete catalog browsing
+- **API Key Authentication**: Secure access with x-api-key header
+- **Rate Limiting**: 60 requests/minute per key
+- **Cloudflare Tunnel**: Permanent HTTPS URL (no more ngrok copy/paste!)
 
 The guide below walks through setting it up from scratch on a new Windows machine.
 
@@ -116,15 +128,24 @@ After it finishes:
 
 ```
 BloombergGPT/
-+-- main.py                          # FastAPI broker
++-- main.py                          # FastAPI broker (v2.2.0)
 +-- GPT_System_Prompt_Adventurous.md # Adventurous system prompt for ChatGPT Custom GPT
 +-- start_bloomberg_broker.bat       # Launch broker + Cloudflare tunnel + status
 +-- stop_bloomberg_broker.bat        # Cleanup script
 +-- start_cloudflared.bat            # Standalone tunnel runner
 +-- check_status.py / check_status.bat
 +-- env.template                     # Copy to .env and edit
-+-- Production Data/Schema.yaml      # OpenAPI spec pointing at Cloudflare URL
++-- Production Data/
+    +-- Schema.yaml                  # OpenAPI spec with 10 endpoints
+    +-- Bloomberg Master Field List.xlsx  # Curated 3,674 fields
++-- Documentation/
+    +-- FIELD_SERVICE_GUIDE.md       # Field discovery & search guide
+    +-- BDS_FIELD_GUIDE.md           # 530+ bulk data fields reference
+    +-- BEQS_SCREENING_GUIDE.md      # Equity screening guide
+    +-- BDS_QUICK_REFERENCE.md       # Top bulk fields quick ref
 +-- archive/                         # Legacy scripts (ngrok etc.)
++-- scripts/
+    +-- field_search_india.py        # Standalone field search tool
 +-- README_OPERATIONS.md             # Ops quick reference
 ```
 
@@ -165,5 +186,33 @@ BloombergGPT/
 - Broker logs appear in the Uvicorn console window.
 - Cloudflare logs appear in the tunnel window (or via `cloudflared service` if installed as a service).
 - For a full reset: run `stop_bloomberg_broker.bat`, restart the Bloomberg Terminal, then run `start_bloomberg_broker.bat`.
+
+---
+
+## 12. Available Endpoints
+
+The Bloomberg Data Broker provides 10 comprehensive endpoints:
+
+### Data Retrieval
+1. **`/blp/refdata`** - Current reference data (prices, fundamentals, company info)
+2. **`/blp/historical`** - Historical time-series data with smart periodicity
+3. **`/blp/bulkdata`** - Bulk/tabular data (530+ BDS fields)
+
+### Field Discovery (NEW in v2.2.0)
+4. **`/blp/fields/search`** - Search Bloomberg's 24,000+ fields by keyword
+5. **`/blp/fields/info`** - Get detailed metadata for specific fields
+6. **`/blp/fields/list`** - Browse complete field catalog by type (Static/RealTime)
+
+### Utilities
+7. **`/blp/fields`** - Static curated field list (3,674 fields)
+8. **`/blp/coverage`** - Check Bloomberg coverage for a ticker
+9. **`/blp/securities`** - Search for Bloomberg tickers (SECF-style)
+10. **`/blp/screen`** - Run Bloomberg Equity Screens (BEQS)
+
+### Documentation
+- **`FIELD_SERVICE_GUIDE.md`** - Complete guide to field discovery endpoints
+- **`BDS_FIELD_GUIDE.md`** - 530+ bulk data fields organized by category
+- **`BEQS_SCREENING_GUIDE.md`** - Equity screening usage guide
+- **`BDS_QUICK_REFERENCE.md`** - Quick reference for top 10 bulk fields
 
 Happy data brokering!

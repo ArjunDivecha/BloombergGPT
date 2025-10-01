@@ -1,0 +1,20 @@
+BLOOMBERG CAPABILITY TEST RESULTS
+=====================================
+
+Test 1: Single Ticker Access
+Status: Testing...
+Result: Will be written here
+
+Test 2: Batch Mode Access
+Status: Testing...
+Result: Will be written here
+
+Test 3: Historical Data Access
+Status: Testing...
+Result: Will be written here
+
+RECOMMENDATIONS:
+Will be written here
+
+PERFORMANCE ESTIMATE:
+Will be written here

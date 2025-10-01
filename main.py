@@ -12,12 +12,17 @@ DESCRIPTION:
 This script implements a secure FastAPI server that acts as a broker for Bloomberg Desktop API.
 It enforces field allow-list, authentication, and rate limiting to comply with Bloomberg licensing.
 
-The server provides five endpoints:
+The server provides ten endpoints:
 1. /blp/refdata - Current reference data for a ticker
 2. /blp/historical - Historical time-series data for a ticker
-3. /blp/fields - List of allowed Bloomberg fields
-4. /blp/coverage - Check Bloomberg coverage for a ticker
-5. /blp/securities - Search Bloomberg instruments (SECF-style)
+3. /blp/bulkdata - Bulk/tabular data (BDS) for a ticker
+4. /blp/fields - List of allowed Bloomberg fields (static catalog)
+5. /blp/fields/search - Dynamic field discovery via keyword search
+6. /blp/fields/info - Detailed field metadata and documentation
+7. /blp/fields/list - Complete Bloomberg field catalog by type
+8. /blp/coverage - Check Bloomberg coverage for a ticker
+9. /blp/securities - Search Bloomberg instruments (SECF-style)
+10. /blp/screen - Bloomberg Equity Screening (BEQS)
 
 REQUIREMENTS:
 - Bloomberg Terminal must be running and logged in
@@ -25,6 +30,7 @@ REQUIREMENTS:
 - Rate limiting: 60 requests per minute per API key
 
 VERSION HISTORY:
+- Version 2.2.0 - Added Bloomberg Field Service endpoints (//blp/apiflds) for dynamic field discovery (2025-10-01)
 - Version 2.1.0 - Expanded field filters and securities search endpoint (2025-09-25)
 - Version 1.0.0 - Initial implementation (2025-09-21)
 
@@ -70,7 +76,7 @@ except ImportError:
 load_dotenv()
 
 # Initialize FastAPI app
-app = FastAPI(title="Bloomberg Data Broker", version="2.1.0")
+app = FastAPI(title="Bloomberg Data Broker", version="2.2.0")
 
 # Rate limiting setup
 limiter = Limiter(key_func=get_remote_address)
@@ -1532,6 +1538,610 @@ async def get_bulkdata(
         debug(f"Response data type: {type(response_data)}")
         # Final fallback - convert everything to strings
         return JSONResponse(content=json.loads(json.dumps(response_data, default=str)))
+
+@app.get("/blp/fields/search")
+@limiter.limit("60/minute")
+async def search_fields(
+    request: Request,
+    query: str = Query(..., description="Search keyword (e.g., 'dividend', 'earnings', 'market cap')"),
+    limit: int = Query(50, ge=1, le=500, description="Maximum number of results"),
+    api_key: str = Depends(get_api_key)
+):
+    """
+    Search for Bloomberg fields by keyword using FieldSearchRequest.
+    
+    This endpoint queries Bloomberg's live field catalog to discover fields
+    matching your search terms. Returns field mnemonics, descriptions, data types,
+    and categories.
+    
+    Examples:
+    - /blp/fields/search?query=dividend
+    - /blp/fields/search?query=earnings&limit=20
+    - /blp/fields/search?query=market%20cap
+    """
+    if not BLOOMBERG_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Bloomberg API not available")
+    
+    session = get_bloomberg_session()
+    if not session:
+        raise HTTPException(status_code=503, detail="Bloomberg session unavailable")
+    
+    try:
+        # Open the apiflds service
+        if not session.openService("//blp/apiflds"):
+            raise HTTPException(status_code=503, detail="Could not open //blp/apiflds service")
+        
+        service = session.getService("//blp/apiflds")
+        request_obj = service.createRequest("FieldSearchRequest")
+        request_obj.set("searchSpec", query)
+        
+        debug(f"Sending FieldSearchRequest for: {query}")
+        session.sendRequest(request_obj)
+        
+        results = []
+        while True:
+            event = session.nextEvent(5000)  # 5 second timeout
+            event_type = event.eventType()
+            
+            if event_type in (blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE):
+                for msg in event:
+                    if msg.hasElement("fieldData"):
+                        field_data = msg.getElement("fieldData")
+                        for i in range(field_data.numValues()):
+                            entry = field_data.getValueAsElement(i)
+                            
+                            field_id = entry.getElementAsString("id") if entry.hasElement("id") else ""
+                            
+                            if entry.hasElement("fieldInfo"):
+                                info = entry.getElement("fieldInfo")
+                                mnemonic = info.getElementAsString("mnemonic") if info.hasElement("mnemonic") else field_id
+                                description = info.getElementAsString("description") if info.hasElement("description") else ""
+                                datatype = info.getElementAsString("datatype") if info.hasElement("datatype") else ""
+                                category = info.getElementAsString("categoryName") if info.hasElement("categoryName") else ""
+                                ftype = info.getElementAsString("fieldType") if info.hasElement("fieldType") else ""
+                                
+                                results.append({
+                                    "mnemonic": mnemonic,
+                                    "id": field_id,
+                                    "description": description,
+                                    "datatype": datatype,
+                                    "category": category,
+                                    "field_type": ftype
+                                })
+                            
+                            if len(results) >= limit:
+                                break
+                    
+                    if len(results) >= limit:
+                        break
+            
+            if event_type == blpapi.Event.RESPONSE or len(results) >= limit:
+                break
+            elif event_type == blpapi.Event.TIMEOUT:
+                break
+        
+        timestamp = datetime.datetime.utcnow()
+        provenance = f"Bloomberg Field Search - query: '{query}' - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        
+        return {
+            "query": query,
+            "total_results": len(results),
+            "limit": limit,
+            "results": results,
+            "provenance": provenance
+        }
+    
+    except Exception as e:
+        debug(f"Field search error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Field search failed: {str(e)}")
+
+
+@app.get("/blp/fields/info")
+@limiter.limit("60/minute")
+async def get_field_info(
+    request: Request,
+    fields: str = Query(..., description="Comma-separated field mnemonics (e.g., 'LAST_PRICE,CUR_MKT_CAP,DVD_YILD')"),
+    api_key: str = Depends(get_api_key)
+):
+    """
+    Get detailed information about specific Bloomberg fields using FieldInfoRequest.
+    
+    Returns comprehensive metadata including:
+    - Field mnemonic and ID
+    - Full description and documentation
+    - Data type (String, Float, Int, Date, Boolean, Bulk, Sequence)
+    - Category and field type (Static vs Real-Time)
+    - Available overrides
+    
+    Examples:
+    - /blp/fields/info?fields=LAST_PRICE
+    - /blp/fields/info?fields=CUR_MKT_CAP,DVD_YILD,PX_VOLUME
+    """
+    if not BLOOMBERG_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Bloomberg API not available")
+    
+    session = get_bloomberg_session()
+    if not session:
+        raise HTTPException(status_code=503, detail="Bloomberg session unavailable")
+    
+    field_list = [f.strip() for f in fields.split(",") if f.strip()]
+    if not field_list:
+        raise HTTPException(status_code=400, detail="No valid fields provided")
+    
+    try:
+        # Open the apiflds service
+        if not session.openService("//blp/apiflds"):
+            raise HTTPException(status_code=503, detail="Could not open //blp/apiflds service")
+        
+        service = session.getService("//blp/apiflds")
+        request_obj = service.createRequest("FieldInfoRequest")
+        
+        for field in field_list:
+            request_obj.append("id", field)
+        
+        request_obj.set("returnFieldDocumentation", True)
+        
+        debug(f"Sending FieldInfoRequest for: {field_list}")
+        session.sendRequest(request_obj)
+        
+        results = []
+        while True:
+            event = session.nextEvent(5000)
+            event_type = event.eventType()
+            
+            if event_type in (blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE):
+                for msg in event:
+                    if msg.hasElement("fieldData"):
+                        field_data = msg.getElement("fieldData")
+                        for i in range(field_data.numValues()):
+                            entry = field_data.getValueAsElement(i)
+                            field_id = entry.getElementAsString("id") if entry.hasElement("id") else ""
+                            
+                            if entry.hasElement("fieldInfo"):
+                                info = entry.getElement("fieldInfo")
+                                field_result = {
+                                    "mnemonic": info.getElementAsString("mnemonic") if info.hasElement("mnemonic") else field_id,
+                                    "id": field_id,
+                                    "description": info.getElementAsString("description") if info.hasElement("description") else "",
+                                    "datatype": info.getElementAsString("datatype") if info.hasElement("datatype") else "",
+                                    "category": info.getElementAsString("categoryName") if info.hasElement("categoryName") else "",
+                                    "field_type": info.getElementAsString("fieldType") if info.hasElement("fieldType") else "",
+                                    "documentation": info.getElementAsString("documentation") if info.hasElement("documentation") else ""
+                                }
+                                
+                                # Get overrides if available
+                                if info.hasElement("overrides"):
+                                    overrides_elem = info.getElement("overrides")
+                                    overrides = []
+                                    for j in range(overrides_elem.numValues()):
+                                        override = overrides_elem.getValueAsElement(j)
+                                        overrides.append({
+                                            "name": override.getElementAsString("mnemonic") if override.hasElement("mnemonic") else "",
+                                            "description": override.getElementAsString("description") if override.hasElement("description") else ""
+                                        })
+                                    field_result["overrides"] = overrides
+                                
+                                results.append(field_result)
+                            elif entry.hasElement("fieldError"):
+                                error_info = entry.getElement("fieldError")
+                                results.append({
+                                    "id": field_id,
+                                    "error": error_info.getElementAsString("message") if error_info.hasElement("message") else "Field not found"
+                                })
+            
+            if event_type == blpapi.Event.RESPONSE:
+                break
+            elif event_type == blpapi.Event.TIMEOUT:
+                break
+        
+        timestamp = datetime.datetime.utcnow()
+        provenance = f"Bloomberg Field Info - fields: {', '.join(field_list)} - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        
+        return {
+            "fields": field_list,
+            "results": results,
+            "provenance": provenance
+        }
+    
+    except Exception as e:
+        debug(f"Field info error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Field info failed: {str(e)}")
+
+
+@app.get("/blp/fields/list")
+@limiter.limit("60/minute")
+async def list_all_fields(
+    request: Request,
+    field_type: str = Query("All", description="Field type filter: All, Static, or RealTime"),
+    limit: int = Query(1000, ge=1, le=10000, description="Maximum number of fields to return"),
+    api_key: str = Depends(get_api_key)
+):
+    """
+    Get a list of all available Bloomberg fields using FieldListRequest.
+    
+    This endpoint retrieves Bloomberg's entire field catalog, optionally filtered by type.
+    Warning: This can return thousands of fields and may take time to complete.
+    
+    Field Types:
+    - All: All available fields (default)
+    - Static: Reference data fields (e.g., company info, fundamentals)
+    - RealTime: Real-time market data fields (e.g., prices, quotes)
+    
+    Examples:
+    - /blp/fields/list?field_type=All&limit=100
+    - /blp/fields/list?field_type=Static&limit=500
+    - /blp/fields/list?field_type=RealTime&limit=200
+    """
+    if not BLOOMBERG_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Bloomberg API not available")
+    
+    if field_type not in ["All", "Static", "RealTime"]:
+        raise HTTPException(status_code=400, detail="field_type must be 'All', 'Static', or 'RealTime'")
+    
+    session = get_bloomberg_session()
+    if not session:
+        raise HTTPException(status_code=503, detail="Bloomberg session unavailable")
+    
+    try:
+        # Open the apiflds service
+        if not session.openService("//blp/apiflds"):
+            raise HTTPException(status_code=503, detail="Could not open //blp/apiflds service")
+        
+        service = session.getService("//blp/apiflds")
+        request_obj = service.createRequest("FieldListRequest")
+        request_obj.set("fieldType", field_type)
+        request_obj.set("returnFieldDocumentation", True)
+        
+        debug(f"Sending FieldListRequest for type: {field_type}")
+        session.sendRequest(request_obj)
+        
+        results = []
+        while True:
+            event = session.nextEvent(10000)  # 10 second timeout for large lists
+            event_type = event.eventType()
+            
+            if event_type in (blpapi.Event.PARTIAL_RESPONSE, blpapi.Event.RESPONSE):
+                for msg in event:
+                    if msg.hasElement("fieldData"):
+                        field_data = msg.getElement("fieldData")
+                        for i in range(field_data.numValues()):
+                            entry = field_data.getValueAsElement(i)
+                            field_id = entry.getElementAsString("id") if entry.hasElement("id") else ""
+                            
+                            if entry.hasElement("fieldInfo"):
+                                info = entry.getElement("fieldInfo")
+                                results.append({
+                                    "mnemonic": info.getElementAsString("mnemonic") if info.hasElement("mnemonic") else field_id,
+                                    "id": field_id,
+                                    "description": info.getElementAsString("description") if info.hasElement("description") else "",
+                                    "datatype": info.getElementAsString("datatype") if info.hasElement("datatype") else "",
+                                    "category": info.getElementAsString("categoryName") if info.hasElement("categoryName") else "",
+                                    "field_type": info.getElementAsString("fieldType") if info.hasElement("fieldType") else ""
+                                })
+                            
+                            if len(results) >= limit:
+                                break
+                    
+                    if len(results) >= limit:
+                        break
+            
+            if event_type == blpapi.Event.RESPONSE or len(results) >= limit:
+                break
+            elif event_type == blpapi.Event.TIMEOUT:
+                debug("FieldListRequest timeout - returning partial results")
+                break
+        
+        timestamp = datetime.datetime.utcnow()
+        provenance = f"Bloomberg Field List - type: {field_type} - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        
+        return {
+            "field_type": field_type,
+            "total_returned": len(results),
+            "limit": limit,
+            "note": "Results may be truncated if limit reached" if len(results) >= limit else "Complete results",
+            "results": results,
+            "provenance": provenance
+        }
+    
+    except Exception as e:
+        debug(f"Field list error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Field list failed: {str(e)}")
+
+
+@app.get("/blp/snapshot")
+@limiter.limit("60/minute")
+async def market_snapshot(
+    request: Request,
+    tickers: str = Query(..., description="Comma-separated tickers (e.g., AAPL,MSFT,GOOGL,AMZN)"),
+    api_key: str = Depends(get_api_key)
+):
+    """
+    Get market snapshot with key metrics in table-ready format.
+
+    Returns pre-formatted data perfect for instant display - no ChatGPT processing needed!
+    Much faster than getting individual fields and formatting them.
+
+    Example: /blp/snapshot?tickers=AAPL,MSFT,GOOGL,AMZN
+    Returns: Table with Price, Change%, Volume, Market Cap, P/E for each ticker
+    """
+    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+
+    if len(ticker_list) == 0:
+        raise HTTPException(status_code=400, detail="No valid tickers provided")
+
+    # Key metrics for snapshot - optimized for fast display
+    fields = ["PX_LAST", "CHG_PCT_1D", "VOLUME", "CUR_MKT_CAP", "PE_RATIO", "DVD_YILD"]
+
+    session = get_bloomberg_session()
+    if not session:
+        raise HTTPException(status_code=503, detail="Bloomberg session unavailable")
+
+    try:
+        # Try batch mode first (if available)
+        try:
+            data = get_bloomberg_data(session, ticker_list, fields)
+            batch_mode = True
+        except:
+            # Fall back to individual requests
+            data = {}
+            for ticker in ticker_list:
+                ticker_data = get_bloomberg_data(session, ticker, fields)
+                if ticker_data:
+                    data[ticker] = ticker_data
+            batch_mode = False
+
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Bloomberg data unavailable: {str(e)}")
+
+    # Format as table rows
+    table = []
+    for ticker in ticker_list:
+        # Try to get data - handle both short ticker and full Bloomberg format
+        ticker_data = None
+        if isinstance(data, dict):
+            # Try short ticker first
+            ticker_data = data.get(ticker, {})
+            # If not found or empty, try with " US Equity" suffix
+            if not ticker_data:
+                ticker_data = data.get(f"{ticker} US Equity", {})
+            # Also try other variations
+            if not ticker_data:
+                for key in data.keys():
+                    if ticker in key:
+                        ticker_data = data[key]
+                        break
+        
+        if not ticker_data:
+            ticker_data = {}
+
+        # Clean ticker name
+        display_ticker = ticker.replace(" US Equity", "")
+
+        row = {
+            "Ticker": display_ticker,
+            "Price": ticker_data.get("PX_LAST", "N/A"),
+            "Change %": ticker_data.get("CHG_PCT_1D", "N/A"),
+            "Volume": ticker_data.get("VOLUME", "N/A"),
+            "Market Cap": ticker_data.get("CUR_MKT_CAP", "N/A"),
+            "P/E Ratio": ticker_data.get("PE_RATIO", "N/A"),
+            "Div Yield": ticker_data.get("DVD_YILD", "N/A")
+        }
+        table.append(row)
+
+    timestamp = datetime.datetime.utcnow()
+    provenance = f"Bloomberg Market Snapshot - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+    return {
+        "table": table,
+        "batch_mode": batch_mode,
+        "ticker_count": len(ticker_list),
+        "field_count": len(fields),
+        "timestamp": timestamp.isoformat(),
+        "provenance": provenance
+    }
+
+
+@app.get("/blp/compare")
+@limiter.limit("60/minute")
+async def compare_tickers(
+    request: Request,
+    tickers: str = Query(..., description="Comma-separated tickers to compare"),
+    metric: str = Query("PE_RATIO", description="Metric to compare (e.g., PE_RATIO, DVD_YILD, CUR_MKT_CAP)"),
+    api_key: str = Depends(get_api_key)
+):
+    """
+    Compare multiple tickers on a single metric.
+
+    Returns chart-ready data and formatted table for instant visualization.
+    Much faster than getting data for each ticker separately.
+
+    Example: /blp/compare?tickers=AAPL,MSFT,GOOGL,AMZN&metric=PE_RATIO
+    Returns: Table + chart data for instant display
+    """
+    ticker_list = [t.strip() for t in tickers.split(",") if t.strip()]
+
+    if len(ticker_list) < 2:
+        raise HTTPException(status_code=400, detail="At least 2 tickers required for comparison")
+
+    session = get_bloomberg_session()
+    if not session:
+        raise HTTPException(status_code=503, detail="Bloomberg session unavailable")
+
+    try:
+        # Try batch mode first
+        try:
+            data = get_bloomberg_data(session, ticker_list, [metric])
+            batch_mode = True
+        except:
+            # Fall back to individual requests
+            data = {}
+            for ticker in ticker_list:
+                ticker_data = get_bloomberg_data(session, ticker, [metric])
+                if ticker_data:
+                    data[ticker] = ticker_data
+            batch_mode = False
+
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Bloomberg data unavailable: {str(e)}")
+
+    # Format for chart and table
+    chart_data = {
+        "labels": [],
+        "values": [],
+        "colors": []
+    }
+
+    table = []
+    valid_count = 0
+
+    for ticker in ticker_list:
+        # Try to get data - handle both short ticker and full Bloomberg format
+        ticker_data = None
+        if isinstance(data, dict):
+            # Try short ticker first
+            ticker_data = data.get(ticker, {})
+            # If not found, try with " US Equity" suffix
+            if not ticker_data or ticker_data.get(metric) is None:
+                ticker_data = data.get(f"{ticker} US Equity", {})
+            # Also try other variations
+            if not ticker_data or ticker_data.get(metric) is None:
+                for key in data.keys():
+                    if ticker in key:
+                        ticker_data = data[key]
+                        break
+        
+        value = ticker_data.get(metric, "N/A") if ticker_data else "N/A"
+
+        # Clean ticker name for display
+        display_ticker = ticker.replace(" US Equity", "")
+
+        # Add to chart data
+        chart_data["labels"].append(display_ticker)
+
+        if value != "N/A":
+            try:
+                numeric_value = float(value)
+                chart_data["values"].append(numeric_value)
+                valid_count += 1
+            except:
+                chart_data["values"].append(0)
+        else:
+            chart_data["values"].append(0)
+
+        # Generate color based on ticker name (simple hash)
+        hash_val = hash(ticker) % 360
+        chart_data["colors"].append(f"hsl({hash_val}, 70%, 50%)")
+
+        # Add to table
+        table.append({
+            "Ticker": display_ticker,
+            metric: value
+        })
+
+    timestamp = datetime.datetime.utcnow()
+    provenance = f"Bloomberg Comparison - {metric} for {len(ticker_list)} tickers - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+    return {
+        "metric": metric,
+        "table": table,
+        "chart": chart_data,
+        "valid_count": valid_count,
+        "batch_mode": batch_mode,
+        "timestamp": timestamp.isoformat(),
+        "provenance": provenance
+    }
+
+
+@app.get("/blp/historical-stats")
+@limiter.limit("60/minute")
+async def historical_stats(
+    request: Request,
+    ticker: str,
+    field: str,
+    start_date: str,
+    end_date: str = Query(None, description="End date (YYYY-MM-DD). Defaults to today"),
+    api_key: str = Depends(get_api_key)
+):
+    """
+    Get statistical summary of historical data instead of full dataset.
+
+    Returns min, max, avg, change%, volatility - perfect for quick insights.
+    Much faster than returning hundreds of data points.
+
+    Example: /blp/historical-stats?ticker=AAPL&field=PX_LAST&start_date=2024-01-01
+    Returns: 8-10 statistics instead of 250+ data points
+    """
+    if not end_date:
+        end_date = datetime.date.today().isoformat()
+
+    session = get_bloomberg_session()
+    if not session:
+        raise HTTPException(status_code=503, detail="Bloomberg session unavailable")
+
+    try:
+        # Get historical data
+        historical_data = get_bloomberg_historical_data(
+            session, ticker, [field], start_date, end_date, "DAILY"
+        )
+
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Bloomberg historical data unavailable: {str(e)}")
+
+    # Extract values
+    values = []
+    dates = []
+    for point in historical_data:
+        val = point["values"].get(field)
+        if val and val != "No Data":
+            try:
+                values.append(float(val))
+                dates.append(point["date"])
+            except:
+                pass
+
+    if not values:
+        raise HTTPException(status_code=404, detail="No data available for the specified period")
+
+    # Calculate statistics
+    current = values[-1]
+    start_value = values[0]
+    minimum = min(values)
+    maximum = max(values)
+    average = sum(values) / len(values)
+    change = current - start_value
+    change_pct = (change / start_value * 100) if start_value != 0 else None
+    volatility = ((maximum - minimum) / start_value * 100) if start_value != 0 else None
+
+    # Sample data for reference (first 5, last 5 points)
+    sample_data = []
+    if len(values) > 10:
+        sample_data = historical_data[:5] + historical_data[-5:]
+    else:
+        sample_data = historical_data
+
+    timestamp = datetime.datetime.utcnow()
+    provenance = f"Bloomberg Historical Stats - {field} for {ticker} from {start_date} to {end_date} - retrieved at {timestamp.strftime('%Y-%m-%d %H:%M:%S UTC')}"
+
+    return {
+        "ticker": ticker,
+        "field": field,
+        "period": f"{start_date} to {end_date}",
+        "data_points": len(values),
+        "statistics": {
+            "current": current,
+            "start": start_value,
+            "min": minimum,
+            "max": maximum,
+            "average": average,
+            "change": change,
+            "change_pct": change_pct,
+            "volatility": volatility
+        },
+        "sample_data": sample_data,
+        "timestamp": timestamp.isoformat(),
+        "provenance": provenance
+    }
+
 
 if __name__ == "__main__":
     import uvicorn

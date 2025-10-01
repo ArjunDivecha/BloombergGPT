@@ -302,3 +302,4 @@ request.set("maxDataPoints", 10000)  # Control maximum points returned
 2. Advanced caching
 3. Performance metrics
 
+

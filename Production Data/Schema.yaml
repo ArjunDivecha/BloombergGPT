@@ -492,3 +492,474 @@ paths:
           description: No bulk data returned for the specified field
         '503':
           description: Bloomberg API unavailable
+  /blp/fields/search:
+    get:
+      operationId: searchFields
+      summary: Search for Bloomberg fields by keyword using live Bloomberg field catalog
+      description: >
+        Dynamic field discovery using Bloomberg's Field Search service (//blp/apiflds).
+        Search by keywords to find relevant fields - returns field mnemonics, descriptions,
+        data types, and categories. This queries Bloomberg's live catalog in real-time.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Search keyword or phrase (e.g., 'dividend', 'earnings', 'market cap', 'P/E ratio')
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 500
+            default: 50
+          description: Maximum number of fields to return
+      responses:
+        '200':
+          description: Field search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query:
+                    type: string
+                    description: The search query that was executed
+                  total_results:
+                    type: integer
+                    description: Number of fields returned
+                  limit:
+                    type: integer
+                    description: Maximum results limit applied
+                  results:
+                    type: array
+                    description: List of matching Bloomberg fields
+                    items:
+                      type: object
+                      properties:
+                        mnemonic:
+                          type: string
+                          description: Bloomberg field mnemonic (e.g., LAST_PRICE)
+                        id:
+                          type: string
+                          description: Bloomberg field ID
+                        description:
+                          type: string
+                          description: Human-readable field description
+                        datatype:
+                          type: string
+                          description: Data type (String, Float, Int, Date, Boolean, Bulk, Sequence)
+                        category:
+                          type: string
+                          description: Bloomberg category (e.g., Market Activity, Analysis)
+                        field_type:
+                          type: string
+                          description: Field type (Static or RealTime)
+                  provenance:
+                    type: string
+                    description: Data source and retrieval timestamp
+        '503':
+          description: Bloomberg API unavailable
+  /blp/fields/info:
+    get:
+      operationId: getFieldInfo
+      summary: Get detailed metadata for specific Bloomberg fields
+      description: >
+        Retrieve comprehensive information about one or more Bloomberg fields using FieldInfoRequest.
+        Returns full documentation, data types, categories, available overrides, and usage information.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: fields
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated field mnemonics (e.g., 'LAST_PRICE,CUR_MKT_CAP,DVD_YILD')
+      responses:
+        '200':
+          description: Field information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fields:
+                    type: array
+                    description: List of requested field mnemonics
+                    items:
+                      type: string
+                  results:
+                    type: array
+                    description: Detailed field information
+                    items:
+                      type: object
+                      properties:
+                        mnemonic:
+                          type: string
+                          description: Bloomberg field mnemonic
+                        id:
+                          type: string
+                          description: Bloomberg field ID
+                        description:
+                          type: string
+                          description: Field description
+                        datatype:
+                          type: string
+                          description: Data type
+                        category:
+                          type: string
+                          description: Bloomberg category
+                        field_type:
+                          type: string
+                          description: Static or RealTime
+                        documentation:
+                          type: string
+                          description: Full field documentation
+                        overrides:
+                          type: array
+                          description: Available field overrides
+                          items:
+                            type: object
+                            properties:
+                              name:
+                                type: string
+                              description:
+                                type: string
+                        error:
+                          type: string
+                          description: Error message if field not found
+                  provenance:
+                    type: string
+                    description: Data source and retrieval timestamp
+        '400':
+          description: Bad request (no valid fields provided)
+        '503':
+          description: Bloomberg API unavailable
+  /blp/fields/list:
+    get:
+      operationId: listFields
+      summary: Get complete Bloomberg field catalog by type
+      description: >
+        Retrieve Bloomberg's entire field catalog using FieldListRequest.
+        Can filter by All, Static (reference data), or RealTime (market data) fields.
+        Warning: This can return thousands of fields and may take time to complete.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: field_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [All, Static, RealTime]
+            default: All
+          description: >
+            Field type filter:
+            'All' = All available fields,
+            'Static' = Reference data fields (company info, fundamentals),
+            'RealTime' = Real-time market data fields (prices, quotes)
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 10000
+            default: 1000
+          description: Maximum number of fields to return
+      responses:
+        '200':
+          description: Field list retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  field_type:
+                    type: string
+                    description: The field type filter applied
+                  total_returned:
+                    type: integer
+                    description: Number of fields returned
+                  limit:
+                    type: integer
+                    description: Maximum results limit applied
+                  note:
+                    type: string
+                    description: Note about result completeness
+                  results:
+                    type: array
+                    description: List of Bloomberg fields
+                    items:
+                      type: object
+                      properties:
+                        mnemonic:
+                          type: string
+                        id:
+                          type: string
+                        description:
+                          type: string
+                        datatype:
+                          type: string
+                        category:
+                          type: string
+                        field_type:
+                          type: string
+                  provenance:
+                    type: string
+                    description: Data source and retrieval timestamp
+        '400':
+          description: Invalid field_type parameter
+        '503':
+          description: Bloomberg API unavailable
+  /blp/snapshot:
+    get:
+      operationId: marketSnapshot
+      summary: Get market snapshot with key metrics for multiple tickers
+      description: >
+        Returns pre-formatted market data perfect for instant display. Includes Price, Change%,
+        Volume, Market Cap, P/E Ratio, and Dividend Yield for multiple tickers. Optimized for
+        fast display - no ChatGPT processing needed. Much faster than individual field requests.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: tickers
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated tickers (e.g., AAPL,MSFT,GOOGL,AMZN)
+      responses:
+        '200':
+          description: Market snapshot retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  table:
+                    type: array
+                    description: Pre-formatted table rows ready for display
+                    items:
+                      type: object
+                      properties:
+                        Ticker:
+                          type: string
+                        Price:
+                          type: string
+                        Change %:
+                          type: string
+                        Volume:
+                          type: string
+                        Market Cap:
+                          type: string
+                        P/E Ratio:
+                          type: string
+                        Div Yield:
+                          type: string
+                  batch_mode:
+                    type: boolean
+                    description: Whether batch mode was used
+                  ticker_count:
+                    type: integer
+                    description: Number of tickers processed
+                  field_count:
+                    type: integer
+                    description: Number of fields retrieved per ticker
+                  timestamp:
+                    type: string
+                    format: date-time
+                  provenance:
+                    type: string
+                    description: Data source and retrieval timestamp
+        '400':
+          description: No valid tickers provided
+        '503':
+          description: Bloomberg API unavailable
+  /blp/compare:
+    get:
+      operationId: compareTickers
+      summary: Compare multiple tickers on a single metric
+      description: >
+        Compare 2+ tickers on any metric (P/E Ratio, Dividend Yield, Market Cap, etc.).
+        Returns both formatted table and chart-ready data for instant visualization.
+        Much faster than getting data for each ticker separately and building comparisons.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: tickers
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated tickers to compare (e.g., AAPL,MSFT,GOOGL,AMZN)
+        - name: metric
+          in: query
+          required: false
+          schema:
+            type: string
+            default: PE_RATIO
+          description: Metric to compare (e.g., PE_RATIO, DVD_YILD, CUR_MKT_CAP, PX_LAST)
+      responses:
+        '200':
+          description: Ticker comparison retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  metric:
+                    type: string
+                    description: The metric being compared
+                  table:
+                    type: array
+                    description: Pre-formatted comparison table
+                    items:
+                      type: object
+                      properties:
+                        Ticker:
+                          type: string
+                        PE_RATIO:
+                          type: string
+                  chart:
+                    type: object
+                    description: Chart-ready data for instant visualization
+                    properties:
+                      labels:
+                        type: array
+                        items:
+                          type: string
+                      values:
+                        type: array
+                        items:
+                          type: number
+                      colors:
+                        type: array
+                        items:
+                          type: string
+                  valid_count:
+                    type: integer
+                    description: Number of tickers with valid data
+                  batch_mode:
+                    type: boolean
+                    description: Whether batch mode was used
+                  timestamp:
+                    type: string
+                    format: date-time
+                  provenance:
+                    type: string
+                    description: Data source and retrieval timestamp
+        '400':
+          description: At least 2 tickers required for comparison
+        '503':
+          description: Bloomberg API unavailable
+  /blp/historical-stats:
+    get:
+      operationId: historicalStats
+      summary: Get statistical summary of historical data
+      description: >
+        Returns statistical summary (min, max, avg, change%, volatility) instead of full dataset.
+        Perfect for quick insights without overwhelming ChatGPT with hundreds of data points.
+        Much faster than returning complete historical datasets.
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: ticker
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Ticker symbol (e.g., AAPL)
+        - name: field
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Field to analyze (e.g., PX_LAST, VOLUME, PE_RATIO)
+        - name: start_date
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Start date (YYYY-MM-DD)
+        - name: end_date
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+          description: End date (YYYY-MM-DD). Defaults to today
+      responses:
+        '200':
+          description: Historical statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ticker:
+                    type: string
+                    description: Ticker symbol
+                  field:
+                    type: string
+                    description: Field analyzed
+                  period:
+                    type: string
+                    description: Date range analyzed
+                  data_points:
+                    type: integer
+                    description: Number of data points analyzed
+                  statistics:
+                    type: object
+                    description: Statistical summary
+                    properties:
+                      current:
+                        type: number
+                        description: Latest value
+                      start:
+                        type: number
+                        description: Starting value
+                      min:
+                        type: number
+                        description: Minimum value in period
+                      max:
+                        type: number
+                        description: Maximum value in period
+                      average:
+                        type: number
+                        description: Average value
+                      change:
+                        type: number
+                        description: Absolute change (current - start)
+                      change_pct:
+                        type: number
+                        description: Percentage change
+                      volatility:
+                        type: number
+                        description: Price volatility as percentage
+                  sample_data:
+                    type: array
+                    description: Sample data points (first 5 + last 5) for reference
+                    items:
+                      type: object
+                      properties:
+                        date:
+                          type: string
+                        values:
+                          type: object
+                  timestamp:
+                    type: string
+                    format: date-time
+                  provenance:
+                    type: string
+                    description: Data source and retrieval timestamp
+        '404':
+          description: No data available for the specified period
+        '503':
+          description: Bloomberg API unavailable

@@ -258,3 +258,4 @@ async def get_refdata(ticker: List[str], ...):
 
 **Next time your GPT screens stocks, watch the logs - you should see ONE batch request instead of 9+ individual calls!** 🎉
 
+
