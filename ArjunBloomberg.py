@@ -294,11 +294,20 @@ def build_rows(portfolio_name, positions, cash, asof, skipped):
 
         use_cusip = cusip is not None and (symbol is None or symbol == cusip)
         if use_cusip:
-            ticker, cusip_cell = None, cusip
             name = desc or cusip
+            # Muni bond CUSIPs go in the FIRST SECURITY_ID column (C); every
+            # other CUSIP-identified holding (e.g. the SCHWAB block's
+            # equity/ETF CUSIPs) goes in column E. col_c/col_e are the two
+            # SECURITY_ID cells replace_block() writes (columns C and E).
+            # Per Arjun, 2026-07-22: muni bond id belongs in column C.
+            if asset_type == "FIXED_INCOME":
+                col_c, col_e = cusip, None
+            else:
+                col_c, col_e = None, cusip
         else:
-            ticker, cusip_cell = f"{symbol} US", None
+            col_c, col_e = f"{symbol} US", None
             name = desc or symbol
+        ticker, cusip_cell = col_c, col_e
 
         grouping = ASSET_TYPE_TO_GROUPING.get(asset_type, "Other")
         rows.append((portfolio_name, ticker, cusip_cell, name, qty, cost_price, asof, grouping))
