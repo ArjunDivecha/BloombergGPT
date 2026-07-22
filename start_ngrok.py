@@ -1,7 +1,36 @@
 #!/usr/bin/env python3
 """
-ngrok Tunnel Starter with Environment Configuration
-Automatically configures and starts ngrok tunnel using .env settings
+=============================================================================
+SCRIPT NAME: start_ngrok.py
+=============================================================================
+
+DESCRIPTION:
+    Starts an ngrok tunnel for the Bloomberg broker service using
+    configuration from .env. Handles authentication token setup and
+    tunnel creation with configurable port, subdomain, and region.
+
+INPUT FILES:
+    (none — .env loaded via python-dotenv)
+
+OUTPUT FILES:
+    (none — no file I/O)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - python-dotenv
+    - ngrok executable
+
+USAGE:
+    python start_ngrok.py
+
+NOTES:
+    - Requires ngrok executable on PATH or in common locations
+    - Requires NGROK_AUTHTOKEN set in .env
+    - Runs until Ctrl+C is pressed
+=============================================================================
 """
 
 import os

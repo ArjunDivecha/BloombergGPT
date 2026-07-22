@@ -1,4 +1,39 @@
-"""Simple test that writes results to a file"""
+"""
+=============================================================================
+SCRIPT NAME: simple_test.py
+=============================================================================
+
+DESCRIPTION:
+    Quick connectivity test for the Bloomberg broker REST API. Tests
+    single ticker access, batch mode access, and historical data
+    retrieval. Writes test results and recommendations to a text file.
+
+INPUT FILES:
+    test_results.txt
+        Template file with placeholder values (e.g., "Will be written here")
+        that this script replaces with actual test outcomes.
+
+OUTPUT FILES:
+    test_results.txt
+        Updated file with actual test results and recommendations
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - requests
+    - python-dotenv
+
+USAGE:
+    python simple_test.py
+
+NOTES:
+    - Requires Bloomberg broker running on localhost:8000
+    - Expects test_results.txt to exist with placeholder markers
+    - Output is appended to test_results.txt with recommendations
+=============================================================================
+"""
 import requests
 import os
 from dotenv import load_dotenv

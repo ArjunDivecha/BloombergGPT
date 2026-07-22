@@ -1,16 +1,42 @@
 """
-SECF-style Security Finder (//blp/instruments)
+=============================================================================
+SCRIPT NAME: secf.py
+=============================================================================
 
-Examples
-- python scripts/secf.py "BALTIC* INDEX*" --max 1000
-- python scripts/secf.py "OMX Baltic*" --max 200
+DESCRIPTION:
+    SECF-style security finder that queries Bloomberg's //blp/instruments API
+    to search for financial instruments matching a user-provided pattern
+    (e.g., "BALTIC* INDEX*"). Sends an instrumentListRequest, deduplicates
+    results, sorts by security name, and prints a ranked table to stdout.
+    Optionally outputs JSON. Analogous to the Bloomberg Terminal's SECF
+    function.
 
-This script sends an instrumentListRequest to //blp/instruments and prints a
-ranked (by security) list of matching securities similar to Bloomberg SECF.
+INPUT FILES:
+    (none -- this script connects to Bloomberg API, no local file input)
 
-Notes
-- Requires: Bloomberg Terminal running and blpapi installed.
-- Supports wildcard patterns in the query (e.g., BALTIC* INDEX*).
+OUTPUT FILES:
+    (none -- this script prints results to stdout only)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - blpapi (Bloomberg API)
+    - argparse (stdlib)
+    - dataclasses (stdlib)
+    - json (stdlib)
+
+USAGE:
+    python secf.py "BALTIC* INDEX*" --max 1000
+    python secf.py "OMX Baltic*" --max 200
+    python secf.py "AAPL*" --max 10 --json
+
+NOTES:
+    - Requires Bloomberg Terminal running on the same network with bbcomm.
+    - Supports wildcard patterns in the query (e.g., BALTIC* INDEX*).
+    - Defaults to localhost:8194 for the Bloomberg API connection.
+=============================================================================
 """
 
 from __future__ import annotations

@@ -1,7 +1,34 @@
 """
-Quick Field Service Health Check
-=================================
-Fast test to verify all 3 field service endpoints are working
+=============================================================================
+SCRIPT NAME: test_field_service_quick.py
+=============================================================================
+
+DESCRIPTION:
+    Quick health check for all 3 field service endpoints (Field Search,
+    Field Info, Field List). Sends HTTP GET requests to localhost:8000
+    and reports pass/fail for each endpoint.
+
+INPUT FILES:
+    (none — no file I/O)
+
+OUTPUT FILES:
+    (none — no file I/O)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - requests
+    - python-dotenv
+
+USAGE:
+    python test_field_service_quick.py
+
+NOTES:
+    - Requires Bloomberg broker running on localhost:8000
+    - Uses API_KEY from .env file (defaults to Caeser00**)
+=============================================================================
 """
 
 import requests

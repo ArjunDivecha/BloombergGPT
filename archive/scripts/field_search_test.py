@@ -1,4 +1,41 @@
-﻿import blpapi
+﻿"""
+=============================================================================
+SCRIPT NAME: field_search_test.py
+=============================================================================
+
+DESCRIPTION:
+    Connects to a Bloomberg terminal session via the bbg API and performs a
+    field search against the //blp/apiflds service using the query string
+    "CPI". For each matching field returned, it extracts the mnemonic,
+    description, and field type, then prints the count of results and the
+    first 10 matches to stdout. This is a utility for discovering available
+    Bloomberg field identifiers related to a topic.
+
+INPUT FILES:
+    (none — this script generates its own data via Bloomberg API)
+
+OUTPUT FILES:
+    (none — this script only prints to stdout)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - blpapi (Bloomberg Python API)
+
+USAGE:
+    python field_search_test.py
+
+NOTES:
+    - Requires a running Bloomberg Terminal session (Parallels VM) with bbcomm
+      exposed on localhost:8194.
+    - The script connects to //blp/apiflds, so no Bloomberg data license is
+      needed — this is a metadata/field-discovery service.
+=============================================================================
+"""
+
+import blpapi
 from blpapi import SessionOptions, Session
 
 options = SessionOptions()

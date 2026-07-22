@@ -1,4 +1,42 @@
-﻿import sys
+﻿"""
+=================================================================================================
+SCRIPT NAME: instrument_search.py
+=================================================================================================
+
+DESCRIPTION:
+    Connects to the Bloomberg Terminal API (blpapi), sends an instrument
+    search request for a given query string (defaults to 'India CPI'), and
+    prints the matching instruments to stdout. The search filters results to
+    economic indicators (yellowKey = 'ECON') and limits output to 100 results.
+    This is useful for finding Bloomberg instrument identifiers (tickers) by
+    name or description before pulling price or reference data.
+
+INPUT FILES:
+    (none -- this script reads a query string from the command line and
+     connects to Bloomberg over the network)
+
+OUTPUT FILES:
+    (none -- this script only prints results to stdout)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - blpapi (Bloomberg Professional API Python SDK)
+
+USAGE:
+    python instrument_search.py <query>
+
+NOTES:
+    - Requires Bloomberg Terminal to be running and accessible on localhost:8194.
+    - The yellowKeyFilter is set to 'ECON' to narrow results to economic
+      indicators; change this to 'EQUITY', 'CORP', etc. to search other types.
+    - If no query is provided as a command-line argument, defaults to 'India CPI'.
+=================================================================================================
+"""
+
+import sys
 import blpapi
 from blpapi import SessionOptions, Session, exception
 

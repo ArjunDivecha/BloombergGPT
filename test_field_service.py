@@ -1,13 +1,36 @@
 """
-Test Bloomberg Field Service Endpoints
-=======================================
+=============================================================================
+SCRIPT NAME: test_field_service.py
+=============================================================================
 
-Tests the three new field service endpoints:
-1. /blp/fields/search - Keyword search
-2. /blp/fields/info - Detailed field information
-3. /blp/fields/list - Complete field catalog
+DESCRIPTION:
+    Tests the three Bloomberg Field Service API endpoints on the broker running
+    at localhost:8000: (1) /blp/fields/search -- keyword search for fields,
+    (2) /blp/fields/info -- detailed field metadata, and (3) /blp/fields/list
+    -- complete field catalog browsing. Assumes the Bloomberg broker is running.
 
-This script assumes the Bloomberg broker is running on localhost:8000
+INPUT FILES:
+    (none -- data is fetched via HTTP from the Bloomberg broker API)
+
+OUTPUT FILES:
+    (none -- results are printed to stdout)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - requests
+    - python-dotenv
+
+USAGE:
+    python test_field_service.py
+
+NOTES:
+    - The Bloomberg broker API (FastAPI) must be running on localhost:8000.
+    - API key is loaded from .env file or falls back to 'Caeser00**'.
+    - Tests three endpoint types with multiple query parameters each.
+=============================================================================
 """
 
 import requests

@@ -215,4 +215,19 @@ The Bloomberg Data Broker provides 10 comprehensive endpoints:
 - **`BEQS_SCREENING_GUIDE.md`** - Equity screening usage guide
 - **`BDS_QUICK_REFERENCE.md`** - Quick reference for top 10 bulk fields
 
+## Results & Operational Status
+
+This is infrastructure tooling, not a research project. Analytical results are not applicable. Key operational metrics:
+
+| Metric | Detail |
+|--------|--------|
+| Endpoints | 10 (refdata, historical, bulkdata, fields/search, fields/info, fields/list, coverage, securities, screen, curated fields) |
+| Fields available | 3,674 curated + 24,000+ searchable via Field Service |
+| Bulk data fields | 530+ via BDS |
+| Authentication | API key header |
+| Rate limit | 60 req/min per key |
+| Transport | Cloudflare Tunnel (permanent HTTPS) |
+
+The broker has been operational and serves as the Bloomberg data access layer for ChatGPT Custom GPTs and other HTTP clients.
+
 Happy data brokering!

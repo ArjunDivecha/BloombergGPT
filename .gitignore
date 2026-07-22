@@ -1,0 +1,32 @@
+# Secrets - never commit (this repo is public)
+.env
+.env.*
+*.env
+tokens.json
+tokens.db
+
+# Portfolio data / run outputs. These contain real holdings and cash
+# balances and must never be published. Deliberately scoped to the portfolio
+# files rather than a blanket *.xlsx, because Production Data/*.xlsx are
+# legitimately tracked reference files.
+PRTU.xlsx
+prtu_backups/
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# macOS
+.DS_Store
+
+# Excel lock/temp files
+~$*
+
+# Agent session transcripts - contain raw conversation text (incl. any
+# secrets read during a session). Never publish, especially from a public repo.
+.pks/

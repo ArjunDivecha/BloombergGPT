@@ -1,4 +1,37 @@
-"""Quick test - just checks if basics work"""
+"""
+=============================================================================
+SCRIPT NAME: quick_test.py
+=============================================================================
+
+DESCRIPTION:
+    Quick smoke test for the Bloomberg broker API running on localhost:8000.
+    Tests two endpoints: single ticker reference data and batch ticker
+    reference data. Verifies that the API key authentication works and that
+    data is returned in the expected format.
+
+INPUT FILES:
+    (none -- data is fetched via HTTP from the Bloomberg broker API)
+
+OUTPUT FILES:
+    (none -- results are printed to stdout)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - requests
+    - python-dotenv
+
+USAGE:
+    python quick_test.py
+
+NOTES:
+    - The Bloomberg broker API (FastAPI) must be running on localhost:8000.
+    - API key is loaded from .env file or falls back to 'Caeser00**'.
+    - Requires a running Bloomberg Terminal connection via the broker service.
+=============================================================================
+"""
 import requests
 import os
 from dotenv import load_dotenv

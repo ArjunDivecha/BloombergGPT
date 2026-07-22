@@ -1,16 +1,38 @@
 """
-Test Bloomberg Account Capabilities
-====================================
+=============================================================================
+SCRIPT NAME: test_account_capabilities.py
+=============================================================================
 
-This script tests what data and features are available to your Bloomberg account
-before implementing optimized endpoints.
+DESCRIPTION:
+    Probes what data and features the Bloomberg account has access to
+    by testing single ticker reference data, batch multi-ticker requests,
+    historical data access, and field availability. Saves results to a
+    JSON file and generates recommendations for optimized endpoints.
 
-Tests:
-1. Basic reference data access
-2. Batch/multi-ticker requests
-3. Historical data access
-4. Field availability
-5. Response times
+INPUT FILES:
+    (none — no file I/O beyond .env)
+
+OUTPUT FILES:
+    account_capabilities_results.json
+        JSON results of all capability tests, including response times
+        and available fields by category
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - requests
+    - python-dotenv
+    - json (stdlib)
+
+USAGE:
+    python test_account_capabilities.py
+
+NOTES:
+    - Requires Bloomberg Terminal logged in and broker running (python main.py)
+    - Output file is written to the current working directory
+=============================================================================
 """
 
 import requests

@@ -1,6 +1,38 @@
 #!/usr/bin/env python3
 """
-Bloomberg Data Broker System Status Monitor
+=============================================================================
+SCRIPT NAME: check_status.py
+=============================================================================
+
+DESCRIPTION:
+    System status monitor for Bloomberg Data Broker. Periodically checks
+    Bloomberg API availability, Bloomberg Terminal connectivity, broker
+    process status, broker REST API health, Cloudflare tunnel status,
+    and environment configuration. Runs in a continuous loop with 10-second
+    refresh intervals.
+
+INPUT FILES:
+    (none — no file I/O)
+
+OUTPUT FILES:
+    (none — no file I/O)
+
+VERSION: 1.0
+LAST UPDATED: 2026-06-05
+AUTHOR: Arjun Divecha
+
+DEPENDENCIES:
+    - requests
+    - python-dotenv
+    - blpapi
+
+USAGE:
+    python check_status.py
+
+NOTES:
+    - Requires Bloomberg Terminal, broker, and Cloudflare tunnel to be running
+    - Runs continuously; press Ctrl+C to exit
+=============================================================================
 """
 
 import os

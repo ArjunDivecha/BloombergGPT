@@ -627,7 +627,7 @@ def get_bloomberg_data(session, ticker, fields):
         all_results = {}
         
         while True:
-            event = session.nextEvent(2000)  # 2 second timeout for batch requests
+            event = session.nextEvent(10000)  # 10 second timeout for large batch requests
             debug(f"Received event type: {event.eventType()}")
             
             if event.eventType() == blpapi.Event.RESPONSE or event.eventType() == blpapi.Event.PARTIAL_RESPONSE:
