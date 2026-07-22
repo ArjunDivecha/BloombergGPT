@@ -5,10 +5,12 @@ SCRIPT NAME: test_groq_kimi.py
 =============================================================================
 
 DESCRIPTION:
-    Tests the Groq API with the Kimi K2 model
-    (moonshotai/kimi-k2-instruct-0905) using the OpenAI-compatible chat
-    completions endpoint. Sends a simple prompt and displays the model's
-    response.
+    Tests the Groq API with the Llama 3.3 70B model
+    (llama-3.3-70b-versatile) using the OpenAI-compatible chat completions
+    endpoint. Sends a simple prompt and displays the model's response.
+
+    Was originally written against moonshotai/kimi-k2-instruct-0905, which
+    Groq retired - it now 404s as model_not_found.
 
 INPUT FILES:
     (none — no file I/O)
@@ -62,12 +64,12 @@ def load_groq_api_key():
 
 
 def test_groq_api():
-    """Test the Groq API with Kimi K2 model using OpenAI-compatible endpoint"""
+    """Test the Groq API with Llama 3.3 70B using OpenAI-compatible endpoint"""
 
     # Configuration from the Factory config
     base_url = "https://api.groq.com/openai/v1"
     api_key = load_groq_api_key()
-    model = "moonshotai/kimi-k2-instruct-0905"
+    model = "llama-3.3-70b-versatile"
     
     # Construct the full URL for chat completions
     url = f"{base_url}/chat/completions"
@@ -88,14 +90,14 @@ def test_groq_api():
             },
             {
                 "role": "user", 
-                "content": "Say 'Hello! Kimi K2 on Groq is working!' if you can respond."
+                "content": "Say 'Hello! Llama 3.3 70B on Groq is working!' if you can respond."
             }
         ],
         "max_tokens": 50,
         "temperature": 0.7
     }
     
-    print(f"Testing Groq API with Kimi K2 model...")
+    print(f"Testing Groq API with Llama 3.3 70B model...")
     print(f"URL: {url}")
     print(f"Model: {model}")
     print("-" * 50)
@@ -108,7 +110,7 @@ def test_groq_api():
         if response.status_code == 200:
             result = response.json()
             print("✅ SUCCESS! API call worked!")
-            print("\nResponse from Kimi K2:")
+            print("\nResponse from Llama 3.3 70B:")
             if "choices" in result and len(result["choices"]) > 0:
                 content = result["choices"][0]["message"]["content"]
                 print(content)
