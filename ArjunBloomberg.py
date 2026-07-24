@@ -73,7 +73,7 @@ For each mapped account, every open position is translated into a BBU row:
                                     MUTUAL_FUND -> "Mutual Funds"
                                     FIXED_INCOME -> "All Fixed Income"
                                     (cash always -> "Portfolio Cash")
-A trailing CASH USD row is added per portfolio from the account's cash
+A trailing CASH CASH row is added per portfolio from the account's cash
 balance (currentBalances.cashBalance).
 
 Positions with neither a usable symbol nor a CUSIP (Schwab sometimes
@@ -216,6 +216,18 @@ ASSET_TYPE_TO_GROUPING = {
     "FIXED_INCOME": "All Fixed Income",
 }
 
+# SECURITY_ID written for the per-portfolio cash row (column C).
+CASH_SECURITY_ID = "CASH CASH"
+
+# Broker symbol -> the symbol to use when building the Bloomberg ticker.
+# Schwab reports the SES rights/when-issued line as "SES+", which Bloomberg
+# does not resolve; it is uploaded as plain SES (Arjun, 2026-07-24). Note this
+# makes it a second "SES US" row in the SCHWAB block, alongside the ordinary
+# SES position - intentional, they are separate lots.
+SYMBOL_OVERRIDES = {
+    "SES+": "SES",
+}
+
 NUMBER_FORMATS = {
     "H": "#,##0.####;[Red]-#,##0.####;-",
     "K": "0.0000;[Red]-0.0000;-",
@@ -305,14 +317,14 @@ def build_rows(portfolio_name, positions, cash, asof, skipped):
             else:
                 col_c, col_e = None, cusip
         else:
-            col_c, col_e = f"{symbol} US", None
+            col_c, col_e = f"{SYMBOL_OVERRIDES.get(symbol, symbol)} US", None
             name = desc or symbol
         ticker, cusip_cell = col_c, col_e
 
         grouping = ASSET_TYPE_TO_GROUPING.get(asset_type, "Other")
         rows.append((portfolio_name, ticker, cusip_cell, name, qty, cost_price, asof, grouping))
 
-    rows.append((portfolio_name, "CASH USD", None, "CASH", cash, 1, asof, "Portfolio Cash"))
+    rows.append((portfolio_name, CASH_SECURITY_ID, None, "CASH", cash, 1, asof, "Portfolio Cash"))
     return rows
 
 
@@ -434,16 +446,16 @@ def build_ibkr_rows(portfolio_name, positions, cash, asof, skipped, non_usd):
         if exchange is None:
             skipped.append((portfolio_name, item))
             continue
+        ticker = f"{SYMBOL_OVERRIDES.get(symbol, symbol)} {exchange}"
         if currency != "USD":
-            non_usd.append((portfolio_name, item, f"{symbol} {exchange}"))
+            non_usd.append((portfolio_name, item, ticker))
 
-        ticker = f"{symbol} {exchange}"
         cost_price = item["avg_price"]
         # Custom grouping stays "US Equities" for every IBKR stock, matching the
         # existing file's convention (it has no international-equity grouping).
         rows.append((portfolio_name, ticker, None, symbol, qty, cost_price, asof, "US Equities"))
 
-    rows.append((portfolio_name, "CASH USD", None, "CASH", cash, 1, asof, "Portfolio Cash"))
+    rows.append((portfolio_name, CASH_SECURITY_ID, None, "CASH", cash, 1, asof, "Portfolio Cash"))
     return rows
 
 
