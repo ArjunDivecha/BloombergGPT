@@ -9,11 +9,12 @@ INPUT FILES:
   one contiguous row-block per portfolio (PORTFOLIO NAME in column B).
   Live data (none) - all position data below comes from the Schwab API.
 
-- /Users/arjundivecha/Dropbox/AAA Backup/A Working/News/report/ibkr_fetch.py
-  Existing, already-working IBKR position-fetch script from the News
-  project. Invoked as a subprocess under News' own .venv-ibkr312
-  interpreter (ib_insync requires Python 3.12) against a locally running,
-  logged-in IB Gateway/TWS session on 127.0.0.1:4002. Not modified.
+- /Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergGPT/ibkr_fetch_full.py
+  This project's IBKR position-fetch script. Invoked as a subprocess under
+  News' .venv-ibkr312 interpreter (ib_insync requires Python 3.12) against a
+  locally running, logged-in LIVE IB Gateway/TWS session on 127.0.0.1:7496
+  or :4001. Emits the futures-detail fields (local_symbol/expiry/multiplier)
+  needed to build Bloomberg futures tickers.
 
 OUTPUT FILES:
 - /Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergGPT/PRTU.xlsx
@@ -102,9 +103,11 @@ probes LIVE ports (see IBKR_LIVE_PORTS) and additionally hard-fails if any
 returned account is paper-prefixed.
 
 Each IBKR position becomes a BBU row the same way as Schwab positions:
-    - Only sec_type == "STK" positions are written; options/futures are
-      skipped with a warning rather than guessing a Bloomberg identifier
-      IBKR's position response doesn't reliably give us.
+    - STK positions are written as equities (see ticker rule below).
+    - FUT positions are written using a verified Bloomberg futures ticker
+      (IBKR_FUT_ROOT_TO_BBG + the localSymbol month/year code); a future
+      whose root is not in that map is skipped and reported, never guessed.
+    - Any other instrument type (options, etc.) is skipped with a warning.
     - Ticker is "{symbol} {exchange}", where exchange is derived from the
       position's trading currency via CURRENCY_TO_BBG_EXCHANGE, so non-USD
       holdings resolve on their local exchange: ETM (AUD) -> "ETM AU",
@@ -162,9 +165,12 @@ ENV_FILE = "/Users/arjundivecha/Dropbox/AAA Backup/.env.txt"
 SCHWAB_KEY_VAR = "SCHWAB_CLIENT_ID"
 SCHWAB_SECRET_VAR = "SCHWAB_CLIENT_SECRET"
 
-# IBKR access, reusing the News project's proven fetch script/venv
+# IBKR access. Reuse News' .venv-ibkr312 interpreter (it has ib_insync on
+# Python 3.12), but run this project's own fetch script - ibkr_fetch_full.py
+# emits the extra futures-detail fields (local_symbol, expiry, multiplier)
+# that News' ibkr_fetch.py omits and that futures ticker construction needs.
 IBKR_PYTHON = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/News/.venv-ibkr312/bin/python3"
-IBKR_FETCH_SCRIPT = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/News/report/ibkr_fetch.py"
+IBKR_FETCH_SCRIPT = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergGPT/ibkr_fetch_full.py"
 
 # LIVE IBKR API ports only, tried in order: TWS-live (7496), Gateway-live (4001).
 # The PAPER ports (TWS 7497, Gateway 4002) are deliberately EXCLUDED - connecting
@@ -193,6 +199,30 @@ IBKR_ACCOUNT_TO_PORTFOLIO = {
     "U1399611": "IBKRMAIN",
     "U14983106": "IBKREXPERIMENT",
     "U24887919": "IBKRLONGSHORT",
+}
+
+# IBKR futures root -> (Bloomberg root, Bloomberg yellow-key sector).
+# Every mapping VERIFIED live against Bloomberg on 2026-07-28: for each held
+# contract, the Bloomberg ticker built as f"{bbg_root}{month_year} {sector}"
+# resolved to a security whose LAST_TRADEABLE_DT and FUT_CONT_SIZE both matched
+# what IBKR reported (2-way cross-check) - e.g. IBKR M6AZ6 -> CRDZ6 Curncy =
+# "Micro AUD/USD Dec26", LTD 2026-12-14, size 10000.
+#   IBKR sym  product                      BBG root  sector
+#   M6A       Micro AUD/USD (CME)          CRD       Curncy
+#   MJY       Micro JPY/USD (CME)          MJY       Curncy
+#   MHG       Micro Copper (COMEX)         MHC       Comdty
+#   MCL       Micro WTI Crude (NYMEX)      WMI       Comdty
+#   QG        E-mini Natural Gas (NYMEX)   EO        Comdty
+# The month+year code (e.g. "Z6") is taken verbatim from IBKR's localSymbol,
+# which uses the same code Bloomberg accepted. STRICT lookup: an IBKR future
+# whose root is NOT here is skipped with a loud warning, never guessed - a
+# wrong futures ticker points Bloomberg at the wrong contract.
+IBKR_FUT_ROOT_TO_BBG = {
+    "M6A": ("CRD", "Curncy"),
+    "MJY": ("MJY", "Curncy"),
+    "MHG": ("MHC", "Comdty"),
+    "MCL": ("WMI", "Comdty"),
+    "QG":  ("EO",  "Comdty"),
 }
 
 # Schwab account nickname -> PRTU.xlsx portfolio block name.
@@ -421,27 +451,72 @@ def fetch_ibkr_positions(port):
     }
 
 
+def build_futures_row(portfolio_name, item, asof, skipped):
+    """Build one BBU row tuple for an IBKR FUT position, or return None (and
+    record it in `skipped`) if it cannot be mapped to a verified Bloomberg
+    ticker. Never guesses a ticker - a wrong futures ID points Bloomberg at
+    the wrong contract.
+
+    Bloomberg ticker = f"{bbg_root}{month_year} {sector}", where the root and
+    sector come from IBKR_FUT_ROOT_TO_BBG (verified live) and the month+year
+    code is taken verbatim from IBKR's localSymbol (e.g. M6AZ6 -> "Z6"). The
+    quoted futures price = IBKR avgCost / multiplier (avgCost is per-contract
+    cost basis for futures); BBU's cost-price column wants the price, per the
+    template's own note ("for FX forwards, enter the forward rate").
+    """
+    root = item["symbol"]
+    local_symbol = item.get("local_symbol") or ""
+    mapping = IBKR_FUT_ROOT_TO_BBG.get(root)
+    if mapping is None or not local_symbol.startswith(root):
+        skipped.append((portfolio_name, item))
+        return None
+
+    bbg_root, sector = mapping
+    month_year = local_symbol[len(root):]          # e.g. "Z6"
+    try:
+        multiplier = float(item.get("multiplier") or 0)
+    except (TypeError, ValueError):
+        multiplier = 0
+    if not month_year or multiplier <= 0:
+        skipped.append((portfolio_name, item))
+        return None
+
+    ticker = f"{bbg_root}{month_year} {sector}"
+    qty = item["quantity"]                          # number of contracts, signed
+    price = item["avg_price"] / multiplier          # per-unit quoted price
+    name = f"{root} {local_symbol}"                 # keep IBKR identity for eyeballing
+    return (portfolio_name, ticker, None, name, qty, price, asof, "Futures")
+
+
 def build_ibkr_rows(portfolio_name, positions, cash, asof, skipped, non_usd):
     """Translate one IBKR account's live positions into BBU row tuples,
     matching the same tuple shape build_rows() produces for Schwab.
 
-    Non-stock instruments (options/futures) are skipped - IBKR's position
-    response has no reliable Bloomberg identifier for them.
-
-    Each stock's Bloomberg exchange code comes from its trading currency via
-    CURRENCY_TO_BBG_EXCHANGE, so non-USD holdings resolve on their local
-    exchange (ETM/AUD -> "ETM AU", IES/GBP -> "IES LN") rather than being
-    mislabelled " US". An unmapped currency is skipped, never guessed.
+    - STK: Bloomberg exchange code comes from the trading currency via
+      CURRENCY_TO_BBG_EXCHANGE, so non-USD holdings resolve on their local
+      exchange (ETM/AUD -> "ETM AU", IES/GBP -> "IES LN"). An unmapped
+      currency is skipped, never guessed.
+    - FUT: mapped to a verified Bloomberg futures ticker (see
+      build_futures_row / IBKR_FUT_ROOT_TO_BBG).
+    - Anything else (options, etc.): skipped and reported.
     """
     rows = []
     for item in positions:
-        symbol = item["symbol"]
-        qty = item["quantity"]
-        currency = item["currency"]
-        if item["sec_type"] != "STK":
+        sec_type = item["sec_type"]
+
+        if sec_type == "FUT":
+            fut_row = build_futures_row(portfolio_name, item, asof, skipped)
+            if fut_row is not None:
+                rows.append(fut_row)
+            continue
+
+        if sec_type != "STK":
             skipped.append((portfolio_name, item))
             continue
 
+        symbol = item["symbol"]
+        qty = item["quantity"]
+        currency = item["currency"]
         exchange = CURRENCY_TO_BBG_EXCHANGE.get(currency)
         if exchange is None:
             skipped.append((portfolio_name, item))
@@ -549,11 +624,12 @@ def main():
             print(f"  [{portfolio_name}] {p}")
 
     if ibkr_skipped:
-        print(f"\nWARNING: skipped {len(ibkr_skipped)} IBKR position(s) - non-stock, or a "
-              f"currency with no Bloomberg exchange code mapped in "
-              f"CURRENCY_TO_BBG_EXCHANGE (review manually):")
+        print(f"\nWARNING: skipped {len(ibkr_skipped)} IBKR position(s) - an option/other "
+              f"instrument, a stock currency not in CURRENCY_TO_BBG_EXCHANGE, or a future "
+              f"whose root is not in IBKR_FUT_ROOT_TO_BBG (review manually, add a mapping):")
         for portfolio_name, item in ibkr_skipped:
-            print(f"  [{portfolio_name}] {item['symbol']} ({item['sec_type']}/{item['currency']}) qty={item['quantity']}")
+            extra = f" local={item.get('local_symbol')}" if item.get("sec_type") == "FUT" else ""
+            print(f"  [{portfolio_name}] {item['symbol']} ({item['sec_type']}/{item['currency']}) qty={item['quantity']}{extra}")
 
     if ibkr_non_usd:
         print(f"\nNOTE: {len(ibkr_non_usd)} non-USD IBKR holding(s) written to their local exchange:")
