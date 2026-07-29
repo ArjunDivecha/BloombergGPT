@@ -12,8 +12,8 @@ INPUT FILES:
 - /Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergGPT/ibkr_fetch_full.py
   This project's IBKR position-fetch script. Invoked as a subprocess under
   News' .venv-ibkr312 interpreter (ib_insync requires Python 3.12) against a
-  locally running, logged-in LIVE IB Gateway/TWS session on 127.0.0.1:7496
-  or :4001. Emits the futures-detail fields (local_symbol/expiry/multiplier)
+  locally running, logged-in LIVE IB Gateway/TWS session (port auto-detected,
+  see IBKR_CANDIDATE_PORTS). Emits futures-detail fields (local_symbol/expiry/multiplier)
   needed to build Bloomberg futures tickers.
 
 OUTPUT FILES:
@@ -85,7 +85,7 @@ security IDs - see repo's "FAIL IS FAIL" policy). Review these manually in
 the Schwab UI if the warning appears.
 
 IBKR SECTION:
-All 3 IBKR accounts are visible on the LIVE TWS API port (7496) and map
+All 3 IBKR accounts are visible on the live TWS API session and map
 1:1 to the three IBKR blocks. Verified 2026-07-22: each account's live
 holdings matched that block's existing hand-maintained holdings exactly.
 
@@ -94,13 +94,15 @@ holdings matched that block's existing hand-maintained holdings exactly.
     U14983106     -> IBKREXPERIMENT   (XBI, XLY, KRE, XLC, IHI, KBE)
     U24887919     -> IBKRLONGSHORT    (no positions, cash only)
 
-IMPORTANT - live vs paper ports: port 4002 (and 7497) are IBKR's PAPER
-trading ports and expose a single simulated "DU..."-prefixed account whose
-holdings are unrelated to the real portfolios. Connecting there and writing
-the result into PRTU.xlsx silently corrupts the real blocks (this happened
-on 2026-07-22 before the mapping was verified). This script therefore only
-probes LIVE ports (see IBKR_LIVE_PORTS) and additionally hard-fails if any
-returned account is paper-prefixed.
+IMPORTANT - live vs paper: a paper-trading session exposes simulated
+"DU"/"DF"-prefixed accounts whose holdings are unrelated to the real
+portfolios; writing those into PRTU.xlsx silently corrupts the real blocks
+(this happened on 2026-07-22 from the paper Gateway). Live-vs-paper is
+decided from the ACCOUNT PREFIX, never the port number, because the IBKR
+port defaults are only conventions and are user-configurable - on this
+machine live TWS serves 7497 while 4002 is the paper Gateway. The script
+probes every candidate port and uses the first session whose accounts are
+not paper-prefixed (see IBKR_CANDIDATE_PORTS / fetch_ibkr_live).
 
 Each IBKR position becomes a BBU row the same way as Schwab positions:
     - STK positions are written as equities (see ticker rule below).
@@ -137,10 +139,11 @@ NOTES:
   /Users/arjundivecha/Dropbox/AAA Backup/.env.txt. They are NEVER hardcoded
   in this file - this repo is public. A missing credential raises rather
   than silently failing at the auth step.
-- LIVE TWS or IB Gateway must be running and logged in on 127.0.0.1:7496
-  or :4001. If neither is reachable, the IBKR portion is skipped with a
-  warning and the IBKR blocks are left untouched (Schwab blocks still
-  update normally). Paper-trading ports are never used - see IBKR SECTION.
+- LIVE TWS or IB Gateway must be running and logged in on 127.0.0.1. The
+  port is auto-detected across IBKR_CANDIDATE_PORTS and validated by account
+  prefix. If no live session is found, the IBKR portion is skipped with a
+  warning and the IBKR blocks are left untouched (Schwab blocks still update
+  normally). Paper sessions are rejected - see IBKR SECTION.
 - Does NOT touch any header/notes rows.
 =============================================================================
 """
@@ -172,13 +175,20 @@ SCHWAB_SECRET_VAR = "SCHWAB_CLIENT_SECRET"
 IBKR_PYTHON = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/News/.venv-ibkr312/bin/python3"
 IBKR_FETCH_SCRIPT = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergGPT/ibkr_fetch_full.py"
 
-# LIVE IBKR API ports only, tried in order: TWS-live (7496), Gateway-live (4001).
-# The PAPER ports (TWS 7497, Gateway 4002) are deliberately EXCLUDED - connecting
-# to paper returns a simulated "DU..."-prefixed account whose holdings would
-# silently overwrite the real portfolio blocks in PRTU.xlsx. This bit us on
-# 2026-07-22 (paper account DUR170932 on 4002 looked like a real pull), hence
-# both the port allowlist and the is-paper account guard in fetch_ibkr_positions().
-IBKR_LIVE_PORTS = [7496, 4001]
+# Candidate IBKR API ports, probed in this order.
+#
+# Do NOT infer live-vs-paper from the port number. The IBKR defaults (live
+# 7496/4001, paper 7497/4002) are only conventions and are user-configurable:
+# on this machine TWS serves the three REAL accounts on 7497, while 4002 is the
+# paper Gateway. An earlier version of this script hard-coded the conventional
+# live ports and therefore skipped the real session entirely (2026-07-29).
+#
+# The authoritative live-vs-paper signal is the ACCOUNT PREFIX: IBKR paper
+# accounts are "DU"/"DF"-prefixed. fetch_ibkr_live() probes each reachable port
+# and accepts the first one whose accounts are not paper, so simulated holdings
+# can never overwrite the real portfolio blocks regardless of port numbering.
+IBKR_CANDIDATE_PORTS = [7496, 4001, 7497, 4002]
+IBKR_PAPER_ACCOUNT_PREFIXES = ("DU", "DF")
 IBKR_CLIENT_ID = 209  # distinct from News' own client id (103) to avoid session collisions
 
 # IBKR position currency -> Bloomberg exchange code used in SECURITY_ID.
@@ -193,7 +203,7 @@ CURRENCY_TO_BBG_EXCHANGE = {
 }
 
 # IBKR account number -> PRTU.xlsx portfolio block name.
-# Confirmed 2026-07-22 against live TWS (port 7496): each account's live
+# Confirmed 2026-07-22 against live TWS: each account's live
 # holdings matched the corresponding block's existing holdings exactly.
 IBKR_ACCOUNT_TO_PORTFOLIO = {
     "U1399611": "IBKRMAIN",
@@ -404,22 +414,19 @@ def replace_block(ws, portfolio_names, all_rows, start_row=1):
         ws.cell(row=r, column=13, value=grouping)         # M: Custom grouping
 
 
-def find_live_ibkr_port():
-    """Return the first reachable LIVE IBKR API port, or None. Paper ports are
-    never probed - see IBKR_LIVE_PORTS."""
-    for port in IBKR_LIVE_PORTS:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=2):
-                return port
-        except OSError:
-            continue
-    return None
+def port_reachable(port, timeout=2):
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+            return True
+    except OSError:
+        return False
 
 
 def fetch_ibkr_positions(port):
-    """Pull live IBKR positions/cash via News' proven ibkr_fetch.py subprocess.
-    Returns {account_number: (positions, cash)} where positions is a list of
-    the raw dicts ibkr_fetch.py emits (symbol/sec_type/currency/quantity/avg_price)."""
+    """Pull IBKR positions/cash from one port via the ibkr_fetch_full.py subprocess.
+    Returns (accounts_dict, paper_accounts) where accounts_dict maps
+    account_number -> (positions, cash) and paper_accounts lists any
+    "DU"/"DF"-prefixed (simulated) accounts found on this port."""
     result = subprocess.run(
         [IBKR_PYTHON, IBKR_FETCH_SCRIPT, "--port", str(port), "--client-id", str(IBKR_CLIENT_ID)],
         capture_output=True, text=True, timeout=120,
@@ -429,13 +436,9 @@ def fetch_ibkr_positions(port):
 
     items = json.loads(result.stdout)
 
-    # Guard: refuse to write simulated paper-trading data into the real
-    # portfolio file. IBKR paper accounts are "DU"/"DF"-prefixed.
-    paper = sorted({i["account"] for i in items if str(i["account"]).upper().startswith(("DU", "DF"))})
-    if paper:
-        raise RuntimeError(
-            f"Refusing to use IBKR paper-trading account(s) {paper} on port {port}. "
-            f"Log in to LIVE TWS/Gateway instead.")
+    paper = sorted({i["account"] for i in items
+                    if str(i["account"]).upper().startswith(IBKR_PAPER_ACCOUNT_PREFIXES)})
+
     positions_by_account = {}
     cash_by_account = {}
     for item in items:
@@ -445,10 +448,43 @@ def fetch_ibkr_positions(port):
         else:
             positions_by_account.setdefault(acct, []).append(item)
 
-    return {
+    accounts = {
         acct: (positions_by_account.get(acct, []), cash_by_account.get(acct, 0.0))
         for acct in set(positions_by_account) | set(cash_by_account)
     }
+    return accounts, paper
+
+
+def fetch_ibkr_live():
+    """Find the IBKR session serving the REAL accounts and return
+    (port, accounts_dict), or (None, {}) if none is available.
+
+    Probes every candidate port and decides live-vs-paper from the ACCOUNT
+    PREFIX, not the port number (see IBKR_CANDIDATE_PORTS) - a port serving
+    only simulated "DU"/"DF" accounts is rejected and the search continues, so
+    paper holdings can never reach PRTU.xlsx.
+    """
+    for port in IBKR_CANDIDATE_PORTS:
+        if not port_reachable(port):
+            continue
+        try:
+            accounts, paper = fetch_ibkr_positions(port)
+        except Exception as e:
+            print(f"  IBKR port {port}: fetch failed ({e}) - trying next port")
+            continue
+
+        live = {a: v for a, v in accounts.items()
+                if not str(a).upper().startswith(IBKR_PAPER_ACCOUNT_PREFIXES)}
+        if paper and not live:
+            print(f"  IBKR port {port}: PAPER account(s) {paper} - rejected, trying next port")
+            continue
+        if not live:
+            print(f"  IBKR port {port}: no accounts returned - trying next port")
+            continue
+        if paper:
+            print(f"  IBKR port {port}: ignoring paper account(s) {paper}")
+        return port, live
+    return None, {}
 
 
 def build_futures_row(portfolio_name, item, asof, skipped):
@@ -571,17 +607,13 @@ def main():
     ibkr_rows_by_portfolio = {}
     ibkr_skipped = []
     ibkr_non_usd = []
-    ibkr_port = find_live_ibkr_port()
+    print("\nIBKR: locating the session serving the real accounts...")
+    ibkr_port, ibkr_data = fetch_ibkr_live()
     if ibkr_port is None:
-        print(f"\nWARNING: no LIVE IBKR API port reachable (tried {IBKR_LIVE_PORTS}) - "
+        print(f"WARNING: no LIVE IBKR session found (probed {IBKR_CANDIDATE_PORTS}) - "
               f"IBKR blocks left untouched. Start/log in to live TWS or IB Gateway.")
     else:
-        print(f"\nIBKR: using live port {ibkr_port}")
-        try:
-            ibkr_data = fetch_ibkr_positions(ibkr_port)
-        except Exception as e:
-            print(f"WARNING: IBKR fetch failed ({e}) - IBKR blocks left untouched")
-            ibkr_data = {}
+        print(f"IBKR: using port {ibkr_port}, live accounts {sorted(ibkr_data)}")
 
         missing_ibkr = set(IBKR_ACCOUNT_TO_PORTFOLIO) - set(ibkr_data)
         if missing_ibkr:
