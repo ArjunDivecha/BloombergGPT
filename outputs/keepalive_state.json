@@ -1,8 +1,8 @@
 {
   "last_alert_state": "UP",
   "last_down_reminder": null,
-  "total_pings": 108129,
-  "total_ok": 94321,
-  "total_fail": 13808,
-  "updated": "2026-07-29T22:44:44.713140+00:00"
+  "total_pings": 129019,
+  "total_ok": 114899,
+  "total_fail": 14120,
+  "updated": "2026-08-08T06:34:13.847646+00:00"
 }
