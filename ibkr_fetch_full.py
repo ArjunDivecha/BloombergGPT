@@ -29,7 +29,7 @@ DESCRIPTION:
     fields can be added without touching News.
 
     Run BY ArjunBloomberg.py as a subprocess under News' .venv-ibkr312
-    interpreter, because ib_insync requires Python 3.12. Everything except
+    interpreter. Everything except
     the JSON payload goes to stderr.
 
     Exit codes: 0 = success, 2 = connection failed, 3 = no data.
@@ -40,11 +40,12 @@ DESCRIPTION:
         divide by `multiplier` downstream to recover the quoted futures price.
 
 DEPENDENCIES:
-    - ib_insync (Python 3.12 venv only: News/.venv-ibkr312)
+    - ibkr_connect (brings ib_async)
+      pip install -e "/Users/arjundivecha/Dropbox/AAA Backup/A Working/IBKR API"
 
 USAGE:
     "/Users/arjundivecha/Dropbox/AAA Backup/A Working/News/.venv-ibkr312/bin/python3" \
-        ibkr_fetch_full.py [--port 4001] [--client-id 233]
+        ibkr_fetch_full.py
 =============================================================================
 """
 
@@ -55,16 +56,22 @@ import sys
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--port", type=int, default=4001)
-    parser.add_argument("--client-id", type=int, default=233)
     args = parser.parse_args()
 
-    from ib_insync import IB
+    # --port/--client-id removed 2026-08-19 (IBKR consolidation). These are REAL
+    # holdings, so ibkr_connect's `portfolio` lane is the only correct source:
+    # the LIVE gateway on 4001, read-only, with this repo's registered clientId.
+    # It also proves the gateway is actually serving account data before handing
+    # the connection over -- a gateway that is logged in but not serving account
+    # data makes reqPositions() hang forever rather than fail.
+    from ibkr_connect import LiveGatewayNeedsLogin, open_portfolio
+    from ibkr_connect.compat import util
 
-    ib = IB()
     try:
-        ib.connect("127.0.0.1", args.port,
-                   clientId=args.client_id, readonly=True, timeout=20)
+        ib = open_portfolio("bloomberggpt")
+    except LiveGatewayNeedsLogin as e:
+        print(f"IBKR live gateway unavailable: {e}", file=sys.stderr)
+        sys.exit(2)
     except Exception as e:
         print(f"IBKR connection failed: {e}", file=sys.stderr)
         sys.exit(2)
@@ -73,7 +80,13 @@ def main():
         accounts = ib.managedAccounts()
         print(f"IBKR accounts: {accounts}", file=sys.stderr)
 
-        positions = ib.reqPositions()
+        # Bounded: reqPositions() has no timeout of its own.
+        try:
+            positions = util.run(ib.reqPositionsAsync(), timeout=60.0)
+        except Exception as e:
+            print(f"IBKR: positions did not return within 60s ({type(e).__name__}). "
+                  f"Diagnose with: python3 -m ibkr_connect.doctor", file=sys.stderr)
+            sys.exit(2)
         print(f"IBKR positions: {len(positions)}", file=sys.stderr)
 
         rows = []

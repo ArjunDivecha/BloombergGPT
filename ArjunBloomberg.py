@@ -11,7 +11,7 @@ INPUT FILES:
 
 - /Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergGPT/ibkr_fetch_full.py
   This project's IBKR position-fetch script. Invoked as a subprocess under
-  News' .venv-ibkr312 interpreter (ib_insync requires Python 3.12) against a
+  the canonical IBKR venv (A Working/IBKR API/.venv) against a
   locally running, logged-in LIVE IB Gateway/TWS session (port auto-detected,
   see IBKR_CANDIDATE_PORTS). Emits futures-detail fields (local_symbol/expiry/multiplier)
   needed to build Bloomberg futures tickers.
@@ -123,7 +123,7 @@ Each IBKR position becomes a BBU row the same way as Schwab positions:
 DEPENDENCIES:
 - schwabdev
 - openpyxl
-- News project's .venv-ibkr312 + ib_insync (invoked as a subprocess only,
+- ibkr_connect + ib_async via the IBKR API repo's .venv (subprocess only,
   not imported directly - this project's own Python does not need
   ib_insync installed)
 
@@ -168,11 +168,15 @@ ENV_FILE = "/Users/arjundivecha/Dropbox/AAA Backup/.env.txt"
 SCHWAB_KEY_VAR = "SCHWAB_CLIENT_ID"
 SCHWAB_SECRET_VAR = "SCHWAB_CLIENT_SECRET"
 
-# IBKR access. Reuse News' .venv-ibkr312 interpreter (it has ib_insync on
-# Python 3.12), but run this project's own fetch script - ibkr_fetch_full.py
+# IBKR access. Use the canonical IBKR venv, but run this project's own fetch
+# script - ibkr_fetch_full.py
 # emits the extra futures-detail fields (local_symbol, expiry, multiplier)
 # that News' ibkr_fetch.py omits and that futures ticker construction needs.
-IBKR_PYTHON = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/News/.venv-ibkr312/bin/python3"
+# The canonical IBKR interpreter, owned by the repo that owns IBKR on this
+# machine. This used to point into News' .venv-ibkr312 -- a venv that existed
+# only because ib_insync needs Python <3.12, and which is being deleted now that
+# everything is on ib_async.
+IBKR_PYTHON = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/IBKR API/.venv/bin/python"
 IBKR_FETCH_SCRIPT = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergGPT/ibkr_fetch_full.py"
 
 # Candidate IBKR API ports, probed in this order.
@@ -187,7 +191,12 @@ IBKR_FETCH_SCRIPT = "/Users/arjundivecha/Dropbox/AAA Backup/A Working/BloombergG
 # accounts are "DU"/"DF"-prefixed. fetch_ibkr_live() probes each reachable port
 # and accepts the first one whose accounts are not paper, so simulated holdings
 # can never overwrite the real portfolio blocks regardless of port numbering.
-IBKR_CANDIDATE_PORTS = [7496, 4001, 7497, 4002]
+# Only the live gateway is probed now: ibkr_connect fixes the lane, so there is
+# nothing to search. The DU/DF account-prefix check below is KEPT as the real
+# guard -- it is what caught the 2026-07-29 mistake, and it defends against a
+# misconfigured gateway serving paper accounts on the live port, which no amount
+# of port bookkeeping can rule out.
+IBKR_CANDIDATE_PORTS = [4001]
 IBKR_PAPER_ACCOUNT_PREFIXES = ("DU", "DF")
 IBKR_CLIENT_ID = 209  # distinct from News' own client id (103) to avoid session collisions
 
@@ -427,9 +436,12 @@ def fetch_ibkr_positions(port):
     Returns (accounts_dict, paper_accounts) where accounts_dict maps
     account_number -> (positions, cash) and paper_accounts lists any
     "DU"/"DF"-prefixed (simulated) accounts found on this port."""
+    # No --port/--client-id: ibkr_fetch_full.py asks ibkr_connect for the
+    # `portfolio` lane, which is the LIVE gateway by construction. `port` is
+    # kept in this signature only so the caller's logging still reads naturally.
     result = subprocess.run(
-        [IBKR_PYTHON, IBKR_FETCH_SCRIPT, "--port", str(port), "--client-id", str(IBKR_CLIENT_ID)],
-        capture_output=True, text=True, timeout=120,
+        [IBKR_PYTHON, IBKR_FETCH_SCRIPT],
+        capture_output=True, text=True, timeout=180,
     )
     if result.returncode != 0:
         raise RuntimeError(f"IBKR fetch failed (exit {result.returncode}): {result.stderr.strip()[-500:]}")
