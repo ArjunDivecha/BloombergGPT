@@ -136,6 +136,8 @@ state = {
     "total_ok": 0,
     "total_fail": 0,
     "last_ping_ms": 0,
+    "down_reason": None,        # "hard_stop" | "unreachable" — WHY we are down
+    "down_detail": "",          # incident id / error snippet for the alert text
     "last_alert_state": None,   # "UP" or "DOWN" — for dedup
     "last_down_reminder": None, # ISO timestamp of last "still down" reminder
 }
@@ -316,6 +318,22 @@ def send_imessage(text: str, recipient: str = None) -> bool:
 # ║  UNIFIED NOTIFICATION                                                   ║
 # ╚══════════════════════════════════════════════════════════════════════════╝
 
+def _hard_stop_blurb(state) -> str:
+    """The alert body for 'the Terminal is fine, our own guard is refusing'."""
+    inc = state.get("down_detail") or "unknown"
+    return (
+        "The Bloomberg TERMINAL IS UP and reachable — this is NOT a Parallels\n"
+        "or network problem. Nothing to check on the Windows side.\n\n"
+        "OUR OWN quota hard-stop is refusing to place calls:\n"
+        f"  incident: {inc}\n"
+        "  (a daily-capacity breach, -4001, trips this sentinel)\n\n"
+        "Daily capacity resets daily. Once a reset has passed, clear it:\n"
+        '  cd "/Users/arjundivecha/Dropbox/AAA Backup/A Working/OpusBloomberg"\n'
+        "  ./.venv/bin/python quota_guard.py clear --confirm CLEAR --reason '...'\n\n"
+        "Every Bloomberg pipeline stays blocked until that is cleared."
+    )
+
+
 def notify(subject: str, body: str):
     """Send a notification via BOTH iMessage and Telegram.
 
@@ -371,6 +389,13 @@ def transition_to(new_state: str):
             state["up_since"] = now.isoformat()
             state["down_since"] = None
             state["consecutive_failures"] = 0
+            # Clear the diagnosis on recovery. Otherwise a stale "hard_stop"
+            # would mislabel the NEXT outage — a genuine Terminal/network
+            # failure reported as "the terminal is fine, clear the guard" is
+            # exactly as misleading as the bug this classification fixes,
+            # only in the other direction.
+            state["down_reason"] = None
+            state["down_detail"] = ""
 
             # Alert on DOWN→UP or UNKNOWN→UP (recovery)
             if old_state in ("DOWN", "UNKNOWN"):
@@ -398,15 +423,22 @@ def transition_to(new_state: str):
             state["up_since"] = None
 
             # Alert on any→DOWN (connection lost)
-            pending_notify = (
-                "🔴 Bloomberg Connection LOST",
-                f"Host: {state['host'] or 'not connected'}\n"
-                f"Time: {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
-                f"Consecutive failures: {state['consecutive_failures']}\n"
-                f"Total pings: {state['total_pings']} | "
-                f"OK: {state['total_ok']} | Fail: {state['total_fail']}\n\n"
-                f"The keepalive will keep retrying and notify you when the connection recovers."
-            )
+            if state.get("down_reason") == "hard_stop":
+                pending_notify = (
+                    "⛔ Bloomberg BLOCKED BY OUR QUOTA GUARD (terminal is fine)",
+                    f"Time: {now.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+                    + _hard_stop_blurb(state)
+                )
+            else:
+                pending_notify = (
+                    "🔴 Bloomberg Connection LOST",
+                    f"Host: {state['host'] or 'not connected'}\n"
+                    f"Time: {now.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    f"Consecutive failures: {state['consecutive_failures']}\n"
+                    f"Total pings: {state['total_pings']} | "
+                    f"OK: {state['total_ok']} | Fail: {state['total_fail']}\n\n"
+                    f"The keepalive will keep retrying and notify you when the connection recovers."
+                )
             state["last_alert_state"] = "DOWN"
             state["last_down_reminder"] = now.isoformat()
 
@@ -486,7 +518,31 @@ def ping_loop():
             log_json(logging.INFO, {"event": "connected", "host": state["host"]})
             return b
         except Exception as e:
-            log_json(logging.ERROR, {"event": "connect_failed", "error": str(e)})
+            # 2026-09-07: classify WHY we could not connect. The Terminal being
+            # unreachable and our OWN quota hard-stop refusing to place calls
+            # are completely different problems with completely different
+            # fixes, and this service used to report both as "Bloomberg
+            # Connection LOST — Host: 10.211.55.3:8194". On 2026-09-06 a
+            # DAILY_CAPACITY_REACHED (-4001) sentinel tripped and sat for 39
+            # hours; the Terminal was up and 8194 open the entire time, but
+            # every alert said the connection was lost, so the operator kept
+            # checking Parallels — where nothing was ever wrong.
+            msg = str(e)
+            low = msg.lower()
+            with lock:
+                if "hard stop" in low or "quota" in low or "-4001" in low:
+                    state["down_reason"] = "hard_stop"
+                    inc = ""
+                    for tok in msg.split():
+                        if tok.startswith("Incident="):
+                            inc = tok.split("=", 1)[1]
+                            break
+                    state["down_detail"] = inc or msg[:160]
+                else:
+                    state["down_reason"] = "unreachable"
+                    state["down_detail"] = msg[:160]
+            log_json(logging.ERROR, {"event": "connect_failed", "error": msg,
+                                     "reason": state["down_reason"]})
             return None
 
     log_json(logging.INFO, {"event": "keepalive_start", "interval": INTERVAL})
@@ -587,14 +643,21 @@ def ping_loop():
                 down_dur = _human_duration((now - ds).total_seconds())
             except Exception:
                 down_dur = "unknown"
-            notify(
-                "🔴 Bloomberg STILL DOWN",
-                f"Connection has been DOWN for {down_dur}.\n"
-                f"Host: {state['host'] or 'not connected'}\n"
-                f"Consecutive failures: {cf}\n"
-                f"Total pings: {state['total_pings']} | Fail: {state['total_fail']}\n\n"
-                f"Keepalive will continue retrying. Next reminder in {DOWN_REMINDER_MIN} minutes."
-            )
+            if state.get("down_reason") == "hard_stop":
+                notify(
+                    "⛔ Bloomberg STILL BLOCKED BY OUR QUOTA GUARD",
+                    f"Blocked for {down_dur} — and it will not clear itself.\n\n"
+                    + _hard_stop_blurb(state)
+                )
+            else:
+                notify(
+                    "🔴 Bloomberg STILL DOWN",
+                    f"Connection has been DOWN for {down_dur}.\n"
+                    f"Host: {state['host'] or 'not connected'}\n"
+                    f"Consecutive failures: {cf}\n"
+                    f"Total pings: {state['total_pings']} | Fail: {state['total_fail']}\n\n"
+                    f"Keepalive will continue retrying. Next reminder in {DOWN_REMINDER_MIN} minutes."
+                )
             mark_down_reminder_sent()
 
         # ── Reconnect logic ─────────────────────────────────────────────
